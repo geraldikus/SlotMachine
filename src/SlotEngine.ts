@@ -1,6 +1,7 @@
 import { Container, Graphics, Texture } from 'pixi.js';
 import { Reel } from './Reel';
 import { SymbolCell } from './SymbolCell';
+import { WinLineOverlay } from './WinLineOverlay';
 import {
   CASCADE_DELAY_MS,
   CellPosition,
@@ -22,6 +23,7 @@ export class SlotEngine extends Container {
   private stoppedReelCount = 0;
   private pendingMatrix: ResultMatrix | null = null;
   private highlightedCells: SymbolCell[] = [];
+  private readonly winLineOverlay = new WinLineOverlay();
 
   constructor(
     symbolKeys: SymbolKey[],
@@ -55,6 +57,8 @@ export class SlotEngine extends Container {
       this.reels.push(reel);
       this.addChild(reel);
     }
+
+    this.addChild(this.winLineOverlay);
   }
 
   get currentState(): SlotState {
@@ -126,6 +130,7 @@ export class SlotEngine extends Container {
     this.highlightedCells = cells.map(({ row, col }) =>
       this.reels[col].getVisibleCell(row as 0 | 1 | 2),
     );
+    this.winLineOverlay.show(cells);
   }
 
   clearWinHighlight(): void {
@@ -134,6 +139,7 @@ export class SlotEngine extends Container {
     }
 
     this.highlightedCells = [];
+    this.winLineOverlay.hide();
   }
 
   private updateWinPulse(): void {
@@ -144,6 +150,8 @@ export class SlotEngine extends Container {
     for (const cell of this.highlightedCells) {
       cell.setPulseScale(pulse);
     }
+
+    this.winLineOverlay.update();
   }
 
   private onReelStopped(): void {

@@ -1,6 +1,6 @@
 import { Application, Container, Graphics, Rectangle, Text, Texture } from 'pixi.js';
 import { CurrencyUI } from './CurrencyUI';
-import { INITIAL_BALANCE, TOTAL_BET } from './currency';
+import { DEFAULT_BET, INITIAL_BALANCE } from './currency';
 import { APP_HEIGHT, APP_WIDTH, getSlotPosition, getSlotScale, LAYOUT } from './layout';
 import { SlotEngine } from './SlotEngine';
 import { SpinService } from './SpinService';
@@ -83,6 +83,7 @@ async function bootstrap(): Promise<void> {
   app.stage.addChild(winBanner);
 
   let balance = INITIAL_BALANCE;
+  let currentBet: number = DEFAULT_BET;
 
   const spinButtonWidth = APP_WIDTH - LAYOUT.padding * 2;
   const spinButton = createSpinButton(spinButtonWidth, () => {
@@ -92,11 +93,15 @@ async function bootstrap(): Promise<void> {
       engine.clearWinHighlight();
       winBanner.hide();
 
-      balance -= TOTAL_BET;
+      currentBet = currencyUI.currentBet;
+      balance -= currentBet;
       currencyUI.setBalance(balance);
+      currencyUI.setBetSelectorEnabled(false);
 
-      const { matrix, winAmount, winningCells } = await spinService.requestSpin();
+      const { matrix, winAmount, winningCells } = await spinService.requestSpin(currentBet);
       await engine.playRound(matrix, MIN_SPIN_MS);
+
+      currencyUI.setBetSelectorEnabled(true);
 
       if (winAmount > 0) {
         engine.showWinHighlight(winningCells);

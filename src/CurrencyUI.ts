@@ -1,10 +1,11 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import { BetSelector } from './BetSelector';
 import {
   CURRENCY_CODE,
+  DEFAULT_BET,
   formatFun,
   INITIAL_BALANCE,
   INITIAL_TOTAL_WIN,
-  TOTAL_BET,
 } from './currency';
 import { APP_WIDTH, getFooterTop, LAYOUT } from './layout';
 
@@ -58,7 +59,7 @@ function createStatBox({ label, value, width, valueStyle = VALUE_STYLE }: StatBo
 
 export class CurrencyUI extends Container {
   private readonly balanceValue: Text;
-  private readonly betValue: Text;
+  private readonly betSelector: BetSelector;
   private readonly winValue: Text;
 
   constructor() {
@@ -92,15 +93,6 @@ export class CurrencyUI extends Container {
     const statsX = LAYOUT.padding;
     const statsY = getFooterTop() + 16;
 
-    const betBox = createStatBox({
-      label: 'TOTAL BET',
-      value: formatFun(TOTAL_BET),
-      width: statBoxWidth,
-    });
-    betBox.container.position.set(statsX, statsY);
-    this.addChild(betBox.container);
-    this.betValue = betBox.valueText;
-
     const winBox = createStatBox({
       label: 'TOTAL WIN',
       value: formatFun(INITIAL_TOTAL_WIN),
@@ -110,6 +102,14 @@ export class CurrencyUI extends Container {
     winBox.container.position.set(statsX + statBoxWidth + LAYOUT.statsGap, statsY);
     this.addChild(winBox.container);
     this.winValue = winBox.valueText;
+
+    this.betSelector = new BetSelector(statBoxWidth, statsX, statsY, DEFAULT_BET);
+    this.betSelector.position.set(statsX, statsY);
+    this.addChild(this.betSelector);
+  }
+
+  get currentBet(): number {
+    return this.betSelector.bet;
   }
 
   setBalance(amount: number): void {
@@ -121,7 +121,11 @@ export class CurrencyUI extends Container {
   }
 
   setTotalBet(amount: number): void {
-    this.betValue.text = formatFun(amount);
+    this.betSelector.setBet(amount);
+  }
+
+  setBetSelectorEnabled(enabled: boolean): void {
+    this.betSelector.setEnabled(enabled);
   }
 
   get currencyCode(): string {

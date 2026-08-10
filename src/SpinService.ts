@@ -18,7 +18,7 @@ export class SpinService {
    * Имитация ответа сервера: результат известен сразу при запросе.
    * В продакшене заменить на fetch('/api/spin').
    */
-  async requestSpin(): Promise<SpinResponse> {
+  async requestSpin(bet: number): Promise<SpinResponse> {
     this.spinCount += 1;
     const isWinSpin = this.spinCount % 3 === 0;
 
@@ -34,7 +34,7 @@ export class SpinService {
 
     return Promise.resolve({
       matrix,
-      winAmount: calcWinAmount(),
+      winAmount: calcWinAmount(bet),
       winningCells: winLine.cells,
     });
   }
