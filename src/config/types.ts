@@ -2,7 +2,7 @@ export type SlotState = 'IDLE' | 'SPINNING' | 'STOPPING';
 
 export type SymbolKey = string;
 
-/** 3 rows × 5 columns result matrix */
+/** 3 rows × 4 columns result matrix */
 export type ResultMatrix = SymbolKey[][];
 
 export type CellPosition = { row: number; col: number };
@@ -16,7 +16,7 @@ export const REEL_WIDTH = 150;
 export const REEL_HEIGHT = 450;
 export const SYMBOL_SIZE = 150;
 export const SPRITE_COUNT = 5;
-export const REEL_COUNT = 5;
+export const REEL_COUNT = 4;
 export const REEL_SPACING = 10;
 
 /** Y positions for the 5 sprites: top buffer, 3 visible rows, bottom buffer */

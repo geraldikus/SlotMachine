@@ -1,4 +1,5 @@
 import { Container, Sprite, Texture } from 'pixi.js';
+import { SymbolTextureMap } from '../assets/loadSymbols';
 import { SymbolCell } from './SymbolCell';
 import {
   REEL_HEIGHT,
@@ -43,6 +44,7 @@ export class Reel extends Container {
     symbolKeys: SymbolKey[],
     initialColumn: SymbolKey[],
     maskTexture: Texture,
+    textures: SymbolTextureMap,
   ) {
     super();
     this.symbolKeys = symbolKeys;
@@ -55,7 +57,7 @@ export class Reel extends Container {
 
     for (let i = 0; i < SPRITE_COUNT; i += 1) {
       const key = initialColumn[i] ?? symbolKeys[i % symbolKeys.length];
-      const cell = new SymbolCell(key);
+      const cell = new SymbolCell(key, textures);
       cell.x = 0;
       cell.y = SPRITE_Y_POSITIONS[i];
       this.cells.push(cell);

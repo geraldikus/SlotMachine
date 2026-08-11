@@ -1,6 +1,7 @@
 import { Application, Container, Graphics, Rectangle, Texture } from 'pixi.js';
 import { DEFAULT_BET, INITIAL_BALANCE } from '../config/currency';
 import { SYMBOLS } from '../config/symbols';
+import { loadSymbolTextures } from '../assets/loadSymbols';
 import { REEL_HEIGHT, REEL_WIDTH } from '../config/types';
 import { SlotEngine } from '../engine/SlotEngine';
 import { LayoutManager } from '../layout/LayoutManager';
@@ -51,12 +52,15 @@ async function bootstrap(): Promise<void> {
   });
   app.ticker.maxFPS = 60;
   document.body.appendChild(app.canvas);
+  app.stage.sortableChildren = true;
 
   const gameRoot = new Container();
   app.stage.addChild(gameRoot);
 
   const reelMaskTexture = createReelMaskTexture(app);
-  const engine = new SlotEngine(SYMBOLS, reelMaskTexture);
+  const symbolTextures = await loadSymbolTextures();
+
+  const engine = new SlotEngine(SYMBOLS, reelMaskTexture, symbolTextures);
   gameRoot.addChild(engine);
   const spinService = new SpinService();
 
@@ -121,6 +125,7 @@ async function bootstrap(): Promise<void> {
       balance = previousState?.balance ?? balance;
       currentBet = previousState?.bet ?? currentBet;
     }
+
   }
 
   layoutScene(false);

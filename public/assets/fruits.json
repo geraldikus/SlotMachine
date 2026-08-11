@@ -1,0 +1,176 @@
+{
+    "frames": {
+        "black-berry-dark.png": {
+            "frame": {
+                "x": 5,
+                "y": 5,
+                "w": 1000,
+                "h": 1210
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 490,
+                "h": 602
+            },
+            "sourceSize": {
+                "w": 490,
+                "h": 602
+            }
+        },
+        "black-berry-light.png": {
+            "frame": {
+                "x": 980,
+                "y": 255,
+                "w": 1000,
+                "h": 1210
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 490,
+                "h": 602
+            },
+            "sourceSize": {
+                "w": 490,
+                "h": 602
+            }
+        },
+        "black-cherry.png": {
+            "frame": {
+                "x": 2050,
+                "y": 5,
+                "w": 1000,
+                "h": 1210
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 640,
+                "h": 603
+            },
+            "sourceSize": {
+                "w": 640,
+                "h": 603
+            }
+        },
+        "coconut.png": {
+            "frame": {
+                "x": 3100,
+                "y": 52,
+                "w": 1000,
+                "h": 1210
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 845,
+                "h": 681
+            },
+            "sourceSize": {
+                "w": 845,
+                "h": 681
+            }
+        },
+        "raspberry.png": {
+            "frame": {
+                "x": 4950,
+                "y": 5,
+                "w": 1000,
+                "h": 1250
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 456,
+                "h": 598
+            },
+            "sourceSize": {
+                "w": 456,
+                "h": 598
+            }
+        },
+        "red-cherry.png": {
+            "frame": {
+                "x": 5965,
+                "y": 5,
+                "w": 1000,
+                "h": 1210
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 640,
+                "h": 603
+            },
+            "sourceSize": {
+                "w": 640,
+                "h": 603
+            }
+        },
+        "red-grape.png": {
+            "frame": {
+                "x": 7400,
+                "y": 5,
+                "w": 1000,
+                "h": 1210
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 766,
+                "h": 732
+            },
+            "sourceSize": {
+                "w": 766,
+                "h": 732
+            }
+        },
+        "strawberry.png": {
+            "frame": {
+                "x": 8800,
+                "y": 305,
+                "w": 1150,
+                "h": 1210
+            },
+            "rotated": false,
+            "trimmed": false,
+            "spriteSourceSize": {
+                "x": 0,
+                "y": 0,
+                "w": 685,
+                "h": 703
+            },
+            "sourceSize": {
+                "w": 685,
+                "h": 703
+            }
+        }
+    },
+    "meta": {
+        "app": "https://www.codeandweb.com/texturepacker",
+        "version": "1.0",
+        "image": "fruits.png",
+        "format": "RGBA8888",
+        "size": {
+            "w": 5092,
+            "h": 742
+        },
+        "scale": "1",
+        "comment": "Created with TexturePacker Online (free version)\nhttps://www.codeandweb.com/texturepacker-online\n\nTexturePacker desktop offers better support for Pixi and Phaser with sprite trimming, better packing algorithms, hardware texture compression, and PNG optimization.\nTry TexturePacker desktop: https://www.codeandweb.com/texturepacker"
+    }
+}

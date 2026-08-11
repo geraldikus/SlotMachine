@@ -1,4 +1,5 @@
 import { Container, Graphics, Texture } from 'pixi.js';
+import { SymbolTextureMap } from '../assets/loadSymbols';
 import { Reel } from './Reel';
 import { SymbolCell } from './SymbolCell';
 import { WinLineOverlay } from './WinLineOverlay';
@@ -29,6 +30,7 @@ export class SlotEngine extends Container {
   constructor(
     symbolKeys: SymbolKey[],
     maskTexture: Texture,
+    textures: SymbolTextureMap,
     initialMatrix?: ResultMatrix,
   ) {
     super();
@@ -38,9 +40,9 @@ export class SlotEngine extends Container {
     this.addChild(frame);
 
     const defaultMatrix: ResultMatrix = initialMatrix ?? [
-      ['A', 'B', 'C', 'D', 'E'],
-      ['B', 'C', 'D', 'E', 'F'],
-      ['C', 'D', 'E', 'F', 'G'],
+      [symbolKeys[0], symbolKeys[1], symbolKeys[2], symbolKeys[3]],
+      [symbolKeys[1], symbolKeys[2], symbolKeys[3], symbolKeys[4]],
+      [symbolKeys[2], symbolKeys[3], symbolKeys[4], symbolKeys[0]],
     ];
 
     for (let column = 0; column < REEL_COUNT; column += 1) {
@@ -52,7 +54,7 @@ export class SlotEngine extends Container {
         defaultMatrix[2][column],
       ];
 
-      const reel = new Reel(symbolKeys, initialColumn, maskTexture);
+      const reel = new Reel(symbolKeys, initialColumn, maskTexture, textures);
       reel.x = column * (REEL_WIDTH + REEL_SPACING);
       reel.on('stopped', () => this.onReelStopped());
       this.reels.push(reel);

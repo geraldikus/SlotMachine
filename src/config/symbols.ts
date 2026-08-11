@@ -1,21 +1,29 @@
 import { SymbolKey } from './types';
 
-export const SYMBOLS: SymbolKey[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+/** Five symbols used in the game. */
+export const SYMBOLS: SymbolKey[] = [
+  'strawberry',
+  'red-cherry',
+  'raspberry',
+  'black-cherry',
+  'black-berry-dark',
+];
 
-export const SYMBOL_COLORS: Record<SymbolKey, number> = {
-  A: 0xff6b6b,
-  B: 0x4ecdc4,
-  C: 0xffe66d,
-  D: 0xa8e6cf,
-  E: 0xff8b94,
-  F: 0xc7ceea,
-  G: 0xffdac1,
+export const SYMBOL_FRAME_SUFFIX = '.png';
+
+/** Per-symbol visual tuning after height-normalized fit. */
+export const SYMBOL_DISPLAY_SCALE: Record<SymbolKey, number> = {
+  strawberry: 1.0,
+  'red-cherry': 1.08,
+  raspberry: 1.12,
+  'black-cherry': 1.08,
+  'black-berry-dark': 1.1,
 };
 
-export function getSymbolColor(key: SymbolKey): number {
-  const color = SYMBOL_COLORS[key];
-  if (color === undefined) {
-    throw new Error(`Color not found for symbol: ${key}`);
-  }
-  return color;
+export function symbolToFrameName(key: SymbolKey): string {
+  return `${key}${SYMBOL_FRAME_SUFFIX}`;
+}
+
+export function getSymbolDisplayScale(key: SymbolKey): number {
+  return SYMBOL_DISPLAY_SCALE[key] ?? 1
 }
