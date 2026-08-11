@@ -1,6 +1,6 @@
 import { Container, Graphics, Text } from 'pixi.js';
-import { getSymbolColor } from './symbols';
-import { SYMBOL_SIZE, SymbolKey } from './types';
+import { getSymbolColor } from '../config/symbols';
+import { SYMBOL_SIZE, SymbolKey } from '../config/types';
 
 export class SymbolCell extends Container {
   private readonly background: Graphics;
@@ -46,5 +46,9 @@ export class SymbolCell extends Container {
 
   resetPulse(): void {
     this.symbolLabel.scale.set(1);
+  }
+
+  setDimmed(dimmed: boolean): void {
+    this.alpha = dimmed ? 0.35 : 1;
   }
 }

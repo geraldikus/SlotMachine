@@ -1,21 +1,21 @@
 import { Container, Graphics, Text } from 'pixi.js';
-import { formatFun } from './currency';
-import { APP_WIDTH, LAYOUT } from './layout';
+import { formatFun } from '../config/currency';
+import { LayoutProfile } from '../layout/types';
 
 const BANNER_HEIGHT = 44;
 
 export class WinBanner extends Container {
   private readonly amountText: Text;
 
-  constructor() {
+  constructor(profile: LayoutProfile) {
     super();
 
     this.visible = false;
 
-    const contentWidth = APP_WIDTH - LAYOUT.padding * 2;
+    const banner = profile.getWinBannerPosition();
     const background = new Graphics();
-    background.roundRect(0, 0, contentWidth, BANNER_HEIGHT, 10).fill({ color: 0x1f4d4a });
-    background.roundRect(0, 0, contentWidth, BANNER_HEIGHT, 10).stroke({ color: 0x4ecdc4, width: 2 });
+    background.roundRect(0, 0, banner.width, BANNER_HEIGHT, 10).fill({ color: 0x1f4d4a });
+    background.roundRect(0, 0, banner.width, BANNER_HEIGHT, 10).stroke({ color: 0x4ecdc4, width: 2 });
     this.addChild(background);
 
     const label = new Text({
@@ -42,7 +42,7 @@ export class WinBanner extends Container {
     this.amountText.position.set(72, 10);
     this.addChild(this.amountText);
 
-    this.position.set(LAYOUT.padding, LAYOUT.padding + 56 + 8);
+    this.position.set(banner.x, banner.y);
   }
 
   show(amount: number): void {

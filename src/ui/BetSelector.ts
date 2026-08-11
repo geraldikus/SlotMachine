@@ -1,6 +1,6 @@
 import { Container, Graphics, Text } from 'pixi.js';
-import { BET_OPTIONS, formatFun } from './currency';
-import { APP_HEIGHT, APP_WIDTH } from './layout';
+import { BET_OPTIONS, formatFun } from '../config/currency';
+import { LayoutProfile } from '../layout/types';
 
 const MENU_ITEM_HEIGHT = 40;
 const MENU_COLUMNS = 3;
@@ -52,6 +52,7 @@ export class BetSelector extends Container {
   private enabled = true;
 
   constructor(
+    profile: LayoutProfile,
     width: number,
     screenX: number,
     screenY: number,
@@ -93,7 +94,10 @@ export class BetSelector extends Container {
     this.addChild(this.hamburgerButton);
 
     this.overlay = new Graphics();
-    this.overlay.rect(0, 0, APP_WIDTH, APP_HEIGHT).fill({ color: 0x000000, alpha: 0.45 });
+    this.overlay.rect(0, 0, profile.designWidth, profile.designHeight).fill({
+      color: 0x000000,
+      alpha: 0.45,
+    });
     this.overlay.position.set(-screenX, -screenY);
     this.overlay.eventMode = 'static';
     this.overlay.cursor = 'pointer';

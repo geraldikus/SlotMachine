@@ -1,7 +1,7 @@
-import { calcWinAmount } from './currency';
-import { SYMBOLS } from './symbols';
-import { CellPosition, ResultMatrix, SymbolKey } from './types';
-import { generateLosingMatrix, generateWinningMatrix } from './win';
+import { calcWinAmount } from '../config/currency';
+import { SYMBOLS } from '../config/symbols';
+import { CellPosition, ResultMatrix, SymbolKey } from '../config/types';
+import { generateLosingMatrix, generateWinningMatrix } from '../logic/win';
 
 export interface SpinResponse {
   matrix: ResultMatrix;

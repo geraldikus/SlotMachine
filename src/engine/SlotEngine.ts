@@ -12,7 +12,7 @@ import {
   ResultMatrix,
   SlotState,
   SymbolKey,
-} from './types';
+} from '../config/types';
 
 const GRID_WIDTH = REEL_COUNT * REEL_WIDTH + (REEL_COUNT - 1) * REEL_SPACING;
 const DEFAULT_MIN_SPIN_MS = 2000;
@@ -23,6 +23,7 @@ export class SlotEngine extends Container {
   private stoppedReelCount = 0;
   private pendingMatrix: ResultMatrix | null = null;
   private highlightedCells: SymbolCell[] = [];
+  private dimmedCells: SymbolCell[] = [];
   private readonly winLineOverlay = new WinLineOverlay();
 
   constructor(
@@ -127,9 +128,22 @@ export class SlotEngine extends Container {
   showWinHighlight(cells: CellPosition[]): void {
     this.clearWinHighlight();
 
-    this.highlightedCells = cells.map(({ row, col }) =>
-      this.reels[col].getVisibleCell(row as 0 | 1 | 2),
-    );
+    const winningKeys = new Set(cells.map(({ row, col }) => `${row},${col}`));
+
+    for (let col = 0; col < REEL_COUNT; col += 1) {
+      for (let row = 0; row < 3; row += 1) {
+        const cell = this.reels[col].getVisibleCell(row as 0 | 1 | 2);
+        const key = `${row},${col}`;
+
+        if (winningKeys.has(key)) {
+          this.highlightedCells.push(cell);
+        } else {
+          cell.setDimmed(true);
+          this.dimmedCells.push(cell);
+        }
+      }
+    }
+
     this.winLineOverlay.show(cells);
   }
 
@@ -138,7 +152,12 @@ export class SlotEngine extends Container {
       cell.resetPulse();
     }
 
+    for (const cell of this.dimmedCells) {
+      cell.setDimmed(false);
+    }
+
     this.highlightedCells = [];
+    this.dimmedCells = [];
     this.winLineOverlay.hide();
   }
 

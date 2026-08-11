@@ -1,4 +1,4 @@
-import { REEL_COUNT, ResultMatrix, SymbolKey, WinLine } from './types';
+import { REEL_COUNT, ResultMatrix, SymbolKey, WinLine } from '../config/types';
 
 const ROW_COUNT = 3;
 const HORIZONTAL_WIN_LENGTH = 3;

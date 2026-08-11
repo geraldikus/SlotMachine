@@ -1,5 +1,5 @@
 import { Container, Graphics } from 'pixi.js';
-import { CellPosition, REEL_SPACING, REEL_WIDTH, SYMBOL_SIZE, VISIBLE_ROW_Y } from './types';
+import { CellPosition, REEL_SPACING, REEL_WIDTH, SYMBOL_SIZE, VISIBLE_ROW_Y } from '../config/types';
 
 const LINE_COLOR = 0xffe66d;
 const GLOW_COLOR = 0x4ecdc4;

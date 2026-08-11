@@ -7,7 +7,7 @@ import {
   SYMBOL_SIZE,
   SymbolKey,
   VISIBLE_ROW_Y,
-} from './types';
+} from '../config/types';
 
 type ReelPhase = 'idle' | 'spinning' | 'decelerating' | 'snapping';
 
