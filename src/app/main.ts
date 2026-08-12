@@ -8,6 +8,7 @@ import { SlotEngine } from '../engine/SlotEngine';
 import { LayoutManager } from '../layout/LayoutManager';
 import { SpinService } from '../services/SpinService';
 import { DesktopGameUI } from '../ui/desktop/DesktopGameUI';
+import { getSpritesheet, SpriteAtlasDebugPanel } from '../ui/debug/SpriteAtlasDebugPanel';
 import { IGameUI } from '../ui/IGameUI';
 import { MobileGameUI } from '../ui/mobile/MobileGameUI';
 
@@ -61,6 +62,10 @@ async function bootstrap(): Promise<void> {
 
   const reelMaskTexture = createReelMaskTexture(app);
   const symbolTextures = await loadSymbolTextures();
+  const spritesheet = await getSpritesheet();
+  const atlasDebugPanel = new SpriteAtlasDebugPanel(spritesheet);
+  atlasDebugPanel.visible = false;
+  app.stage.addChild(atlasDebugPanel);
   await loadAlienAssets();
 
   const engine = new SlotEngine(SYMBOLS, reelMaskTexture, symbolTextures);
@@ -151,6 +156,11 @@ async function bootstrap(): Promise<void> {
         alienCharacter.applyLayout(alienLayout);
       }
     }
+
+    // atlasDebugPanel.visible = isDesktop;
+    // if (isDesktop) {
+    //   atlasDebugPanel.layout(window.innerWidth, window.innerHeight);
+    // }
   }
 
   layoutScene(false);
@@ -158,6 +168,15 @@ async function bootstrap(): Promise<void> {
   window.addEventListener('resize', () => {
     const profileChanged = layoutManager.refreshProfile();
     layoutScene(profileChanged);
+    if (atlasDebugPanel.visible) {
+      atlasDebugPanel.layout(window.innerWidth, window.innerHeight);
+    }
+  });
+
+  app.renderer.on('resize', () => {
+    if (atlasDebugPanel.visible) {
+      atlasDebugPanel.layout(window.innerWidth, window.innerHeight);
+    }
   });
 
   app.ticker.add((ticker) => {

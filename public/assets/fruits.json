@@ -2,10 +2,10 @@
     "frames": {
         "black-berry-dark.png": {
             "frame": {
-                "x": 5,
-                "y": 20,
+                "x": 15,
+                "y": 15,
                 "w": 1000,
-                "h": 1210
+                "h": 1250
             },
             "rotated": false,
             "trimmed": false,
@@ -23,9 +23,9 @@
         "black-berry-light.png": {
             "frame": {
                 "x": 1040,
-                "y": 55,
-                "w": 1050,
-                "h": 1210
+                "y": 15,
+                "w": 1070,
+                "h": 1250
             },
             "rotated": false,
             "trimmed": false,
@@ -42,9 +42,9 @@
         },
         "black-cherry.png": {
             "frame": {
-                "x": 2055,
-                "y": 5,
-                "w": 1300,
+                "x": 2100,
+                "y": 15,
+                "w": 1270,
                 "h": 1250
             },
             "rotated": false,
@@ -62,10 +62,10 @@
         },
         "coconut.png": {
             "frame": {
-                "x": 3500,
-                "y": 52,
-                "w": 1000,
-                "h": 1210
+                "x": 215,
+                "y": 847,
+                "w": 1040,
+                "h": 1250
             },
             "rotated": false,
             "trimmed": false,
@@ -82,9 +82,9 @@
         },
         "raspberry.png": {
             "frame": {
-                "x": 5150,
-                "y": 5,
-                "w": 1000,
+                "x": 1720,
+                "y": 1248,
+                "w": 1040,
                 "h": 1250
             },
             "rotated": false,
@@ -102,10 +102,10 @@
         },
         "red-cherry.png": {
             "frame": {
-                "x": 6170,
-                "y": 25,
+                "x": 3400,
+                "y": 15,
                 "w": 1300,
-                "h": 1210
+                "h": 1250
             },
             "rotated": false,
             "trimmed": false,
@@ -122,10 +122,10 @@
         },
         "red-grape.png": {
             "frame": {
-                "x": 7400,
-                "y": 5,
-                "w": 1000,
-                "h": 1210
+                "x": 1376,
+                "y": 648,
+                "w": 766,
+                "h": 732
             },
             "rotated": false,
             "trimmed": false,
@@ -142,10 +142,10 @@
         },
         "strawberry.png": {
             "frame": {
-                "x": 9100,
-                "y": 100,
-                "w": 1320,
-                "h": 1400
+                "x": 30,
+                "y": 2900,
+                "w": 1390,
+                "h": 1350
             },
             "rotated": false,
             "trimmed": false,
@@ -167,8 +167,8 @@
         "image": "fruits.png",
         "format": "RGBA8888",
         "size": {
-            "w": 5092,
-            "h": 742
+            "w": 2380,
+            "h": 2128
         },
         "scale": "1",
         "comment": "Created with TexturePacker Online (free version)\nhttps://www.codeandweb.com/texturepacker-online\n\nTexturePacker desktop offers better support for Pixi and Phaser with sprite trimming, better packing algorithms, hardware texture compression, and PNG optimization.\nTry TexturePacker desktop: https://www.codeandweb.com/texturepacker"

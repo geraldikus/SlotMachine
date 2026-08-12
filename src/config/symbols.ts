@@ -1,6 +1,6 @@
 import { SymbolKey } from './types';
 
-/** Six symbols used in the game. */
+/** Six symbols in the slot (coconut and red-grape are in the atlas but unused). */
 export const SYMBOLS: SymbolKey[] = [
   'strawberry',
   'red-cherry',
