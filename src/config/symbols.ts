@@ -1,23 +1,25 @@
 import { SymbolKey } from './types';
 
-/** Five symbols used in the game. */
+/** Six symbols used in the game. */
 export const SYMBOLS: SymbolKey[] = [
   'strawberry',
   'red-cherry',
   'raspberry',
   'black-cherry',
   'black-berry-dark',
+  'black-berry-light',
 ];
 
 export const SYMBOL_FRAME_SUFFIX = '.png';
 
 /** Per-symbol visual tuning after height-normalized fit. */
 export const SYMBOL_DISPLAY_SCALE: Record<SymbolKey, number> = {
-  strawberry: 1.0,
+  'strawberry': 1.0,
   'red-cherry': 1.08,
-  raspberry: 1.12,
+  'raspberry': 1.12,
   'black-cherry': 1.08,
   'black-berry-dark': 1.1,
+  'black-berry-light': 1.1,
 };
 
 export function symbolToFrameName(key: SymbolKey): string {

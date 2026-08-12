@@ -3,7 +3,7 @@
         "black-berry-dark.png": {
             "frame": {
                 "x": 5,
-                "y": 5,
+                "y": 20,
                 "w": 1000,
                 "h": 1210
             },
@@ -22,9 +22,9 @@
         },
         "black-berry-light.png": {
             "frame": {
-                "x": 980,
-                "y": 255,
-                "w": 1000,
+                "x": 1040,
+                "y": 55,
+                "w": 1050,
                 "h": 1210
             },
             "rotated": false,
@@ -42,10 +42,10 @@
         },
         "black-cherry.png": {
             "frame": {
-                "x": 2050,
+                "x": 2055,
                 "y": 5,
-                "w": 1000,
-                "h": 1210
+                "w": 1300,
+                "h": 1250
             },
             "rotated": false,
             "trimmed": false,
@@ -62,7 +62,7 @@
         },
         "coconut.png": {
             "frame": {
-                "x": 3100,
+                "x": 3500,
                 "y": 52,
                 "w": 1000,
                 "h": 1210
@@ -82,7 +82,7 @@
         },
         "raspberry.png": {
             "frame": {
-                "x": 4950,
+                "x": 5150,
                 "y": 5,
                 "w": 1000,
                 "h": 1250
@@ -102,9 +102,9 @@
         },
         "red-cherry.png": {
             "frame": {
-                "x": 5965,
-                "y": 5,
-                "w": 1000,
+                "x": 6170,
+                "y": 25,
+                "w": 1300,
                 "h": 1210
             },
             "rotated": false,
@@ -142,10 +142,10 @@
         },
         "strawberry.png": {
             "frame": {
-                "x": 8800,
-                "y": 305,
-                "w": 1150,
-                "h": 1210
+                "x": 9100,
+                "y": 100,
+                "w": 1320,
+                "h": 1400
             },
             "rotated": false,
             "trimmed": false,
