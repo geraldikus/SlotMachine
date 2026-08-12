@@ -1,5 +1,5 @@
 import { REEL_HEIGHT } from '../config/types';
-import { GRID_WIDTH, LayoutProfile } from './types';
+import { AlienLayout, GRID_WIDTH, LayoutProfile } from './types';
 
 /** Matches SlotEngine frame inset (roundRect at -8). */
 const SLOT_FRAME_PADDING = 8;
@@ -10,15 +10,19 @@ const FOOTER_HEIGHT = 76;
 const SLOT_GAP = 8;
 const SLOT_SCALE = 1.02;
 
+/** Reserved design-space column for the Spine character (left of the slot). */
+export const ALIEN_ZONE_WIDTH = 180;
+
 const CHROME_WIDTH = (GRID_WIDTH + SLOT_FRAME_PADDING * 2) * SLOT_SCALE;
-const DESIGN_WIDTH = CHROME_WIDTH + PADDING * 2;
+const SLOT_COLUMN_OFFSET = ALIEN_ZONE_WIDTH;
+const DESIGN_WIDTH = SLOT_COLUMN_OFFSET + CHROME_WIDTH + PADDING * 2;
 
 const SCALED_SLOT_HEIGHT = REEL_HEIGHT * SLOT_SCALE;
 const DESIGN_HEIGHT =
   PADDING + HEADER_HEIGHT + SLOT_GAP + SCALED_SLOT_HEIGHT + SLOT_GAP + FOOTER_HEIGHT + PADDING;
 
 function getPanelBounds(): { x: number; width: number } {
-  return { x: PADDING, width: CHROME_WIDTH };
+  return { x: PADDING + SLOT_COLUMN_OFFSET, width: CHROME_WIDTH };
 }
 
 export const desktopProfile: LayoutProfile = {
@@ -52,7 +56,7 @@ export const desktopProfile: LayoutProfile = {
 
   getSlotPosition(_scaleX: number, _scaleY: number): { x: number; y: number } {
     return {
-      x: PADDING + SLOT_FRAME_PADDING * SLOT_SCALE,
+      x: PADDING + SLOT_COLUMN_OFFSET + SLOT_FRAME_PADDING * SLOT_SCALE,
       y: PADDING + HEADER_HEIGHT + SLOT_GAP,
     };
   },
@@ -76,6 +80,15 @@ export const desktopProfile: LayoutProfile = {
       x: panel.x,
       y: PADDING + HEADER_HEIGHT + 4,
       width: panel.width,
+    };
+  },
+
+  getAlienLayout(): AlienLayout {
+    const slotTop = PADDING + HEADER_HEIGHT + SLOT_GAP;
+    return {
+      x: ALIEN_ZONE_WIDTH / 2,
+      y: slotTop + SCALED_SLOT_HEIGHT * 0.98,
+      scale: 0.45,
     };
   },
 };

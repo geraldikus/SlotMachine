@@ -2,12 +2,12 @@ import { Application, Container, Graphics, Rectangle, Texture } from 'pixi.js';
 import { DEFAULT_BET, INITIAL_BALANCE } from '../config/currency';
 import { SYMBOLS } from '../config/symbols';
 import { loadSymbolTextures } from '../assets/loadSymbols';
+import { AlienCharacter, loadAlienAssets } from '../character';
 import { REEL_HEIGHT, REEL_WIDTH } from '../config/types';
 import { SlotEngine } from '../engine/SlotEngine';
 import { LayoutManager } from '../layout/LayoutManager';
 import { SpinService } from '../services/SpinService';
 import { DesktopGameUI } from '../ui/desktop/DesktopGameUI';
-import { getSpritesheet, SpriteAtlasDebugPanel } from '../ui/debug/SpriteAtlasDebugPanel';
 import { IGameUI } from '../ui/IGameUI';
 import { MobileGameUI } from '../ui/mobile/MobileGameUI';
 
@@ -56,22 +56,22 @@ async function bootstrap(): Promise<void> {
   app.stage.sortableChildren = true;
 
   const gameRoot = new Container();
+  gameRoot.sortableChildren = true;
   app.stage.addChild(gameRoot);
 
   const reelMaskTexture = createReelMaskTexture(app);
   const symbolTextures = await loadSymbolTextures();
-  const spritesheet = await getSpritesheet();
-  const atlasDebugPanel = new SpriteAtlasDebugPanel(spritesheet);
-  atlasDebugPanel.visible = false;
-  app.stage.addChild(atlasDebugPanel);
+  await loadAlienAssets();
 
   const engine = new SlotEngine(SYMBOLS, reelMaskTexture, symbolTextures);
+  engine.zIndex = 1;
   gameRoot.addChild(engine);
   const spinService = new SpinService();
 
   let balance = INITIAL_BALANCE;
   let currentBet: number = DEFAULT_BET;
   let gameUI: (IGameUI & Container) | null = null;
+  let alienCharacter: AlienCharacter | null = null;
   let isSpinning = false;
 
   const handleSpin = (): void => {
@@ -81,6 +81,8 @@ async function bootstrap(): Promise<void> {
       isSpinning = true;
       engine.clearWinHighlight();
       gameUI!.winBanner.hide();
+
+      alienCharacter?.playHit();
 
       currentBet = gameUI!.currentBet;
       balance -= currentBet;
@@ -94,6 +96,7 @@ async function bootstrap(): Promise<void> {
       isSpinning = false;
 
       if (winAmount > 0) {
+        alienCharacter?.playDeath();
         engine.showWinHighlight(winningCells);
         gameUI!.winBanner.show(winAmount);
         balance += winAmount;
@@ -121,6 +124,7 @@ async function bootstrap(): Promise<void> {
       const previousState = gameUI?.getState();
       gameUI?.destroy({ children: true });
       gameUI = createGameUI(currentProfile, handleSpin);
+      gameUI.zIndex = 3;
       gameRoot.addChild(gameUI);
       gameUI.applyState({
         balance: previousState?.balance ?? balance,
@@ -132,15 +136,21 @@ async function bootstrap(): Promise<void> {
     }
 
     const isDesktop = currentProfile.id === 'desktop';
-    atlasDebugPanel.visible = isDesktop;
-    if (isDesktop) {
-      atlasDebugPanel.layout(window.innerWidth, window.innerHeight);
-    }
-  }
 
-  function layoutAtlasDebugPanel(): void {
-    if (!atlasDebugPanel.visible) return;
-    atlasDebugPanel.layout(window.innerWidth, window.innerHeight);
+    if (isDesktop && !alienCharacter) {
+      alienCharacter = new AlienCharacter();
+      alienCharacter.zIndex = 2;
+      alienCharacter.attachPointerTracking(app.stage);
+      gameRoot.addChild(alienCharacter);
+    }
+
+    if (alienCharacter) {
+      alienCharacter.visible = isDesktop;
+      const alienLayout = currentProfile.getAlienLayout?.();
+      if (isDesktop && alienLayout) {
+        alienCharacter.applyLayout(alienLayout);
+      }
+    }
   }
 
   layoutScene(false);
@@ -148,10 +158,7 @@ async function bootstrap(): Promise<void> {
   window.addEventListener('resize', () => {
     const profileChanged = layoutManager.refreshProfile();
     layoutScene(profileChanged);
-    layoutAtlasDebugPanel();
   });
-
-  app.renderer.on('resize', layoutAtlasDebugPanel);
 
   app.ticker.add((ticker) => {
     engine.update(ticker.deltaTime);

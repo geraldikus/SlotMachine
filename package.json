@@ -11,6 +11,7 @@
     "preview:host": "vite preview --host"
   },
   "dependencies": {
+    "@esotericsoftware/spine-pixi-v8": "^4.3.13",
     "pixi.js": "^8.0.0"
   },
   "devDependencies": {

@@ -4,6 +4,12 @@ export type LayoutId = 'mobile' | 'desktop';
 
 export const GRID_WIDTH = REEL_COUNT * REEL_WIDTH + (REEL_COUNT - 1) * REEL_SPACING;
 
+export interface AlienLayout {
+  x: number;
+  y: number;
+  scale: number;
+}
+
 export interface LayoutProfile {
   readonly id: LayoutId;
   readonly designWidth: number;
@@ -20,6 +26,7 @@ export interface LayoutProfile {
   getSlotPosition(scaleX: number, scaleY: number): { x: number; y: number };
   getSpinButtonLayout(): { width: number; x: number; y: number };
   getWinBannerPosition(): { x: number; y: number; width: number };
+  getAlienLayout?(): AlienLayout;
 }
 
 const SLOT_HEIGHT_STRETCH = 1.15;
