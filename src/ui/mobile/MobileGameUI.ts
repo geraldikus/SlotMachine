@@ -23,7 +23,7 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
     this.betSelector.setBet(DEFAULT_BET);
 
     const spinLayout = profile.getSpinButtonLayout();
-    this.spinButton = new SpinButton(spinLayout.width, profile, onSpin);
+    this.spinButton = new SpinButton(spinLayout.width, profile, "SPIN", onSpin);
     this.spinButton.position.set(spinLayout.x, spinLayout.y);
     this.addChild(this.spinButton);
   }
@@ -57,6 +57,10 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
   setBetSelectorEnabled(enabled: boolean): void {
     this.betSelector.setEnabled(enabled);
     this.spinButton.setEnabled(enabled);
+  }
+
+  setAutoSpinActive(_active: boolean): void {
+    // Auto spin is desktop-only for now.
   }
 
   update(): void {

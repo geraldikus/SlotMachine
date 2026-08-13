@@ -14,6 +14,7 @@ export interface IGameUI {
   setBalance(amount: number, animate?: boolean): void;
   setTotalWin(amount: number, animate?: boolean): void;
   setBetSelectorEnabled(enabled: boolean): void;
+  setAutoSpinActive(active: boolean): void;
   update(): void;
   destroy(options?: { children?: boolean }): void;
 }

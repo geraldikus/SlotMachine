@@ -1,7 +1,7 @@
 import { calcWinAmount } from '../config/currency';
 import { SYMBOLS } from '../config/symbols';
 import { CellPosition, ResultMatrix, SymbolKey } from '../config/types';
-import { generateLosingMatrix, generateWinningMatrix } from '../logic/win';
+import { findWinLine, generateLosingMatrix, generateWinningMatrix } from '../logic/win';
 
 export interface SpinResponse {
   matrix: ResultMatrix;
@@ -22,20 +22,16 @@ export class SpinService {
     this.spinCount += 1;
     const isWinSpin = this.spinCount % 3 === 0;
 
-    if (!isWinSpin) {
-      return Promise.resolve({
-        matrix: generateLosingMatrix(this.symbols),
-        winAmount: 0,
-        winningCells: [],
-      });
-    }
+    const matrix = isWinSpin
+      ? generateWinningMatrix(this.symbols).matrix
+      : generateLosingMatrix(this.symbols);
 
-    const { matrix, winLine } = generateWinningMatrix(this.symbols);
+    const winLine = findWinLine(matrix);
 
     return Promise.resolve({
       matrix,
-      winAmount: calcWinAmount(bet),
-      winningCells: winLine.cells,
+      winAmount: winLine ? calcWinAmount(bet) : 0,
+      winningCells: winLine?.cells ?? [],
     });
   }
 }

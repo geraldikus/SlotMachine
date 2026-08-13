@@ -32,9 +32,9 @@ function createReelMaskTexture(app: Application): Texture {
   return texture;
 }
 
-function createGameUI(profile: LayoutManager['currentProfile'], onSpin: () => void): IGameUI & Container {
+function createGameUI(profile: LayoutManager['currentProfile'], onSpin: () => void, onAutoSpin: () => void): IGameUI & Container {
   if (profile.id === 'desktop') {
-    return new DesktopGameUI(profile, onSpin);
+    return new DesktopGameUI(profile, onSpin, onAutoSpin);
   }
   return new MobileGameUI(profile, onSpin);
 }
@@ -78,6 +78,19 @@ async function bootstrap(): Promise<void> {
   let gameUI: (IGameUI & Container) | null = null;
   let alienCharacter: AlienCharacter | null = null;
   let isSpinning = false;
+  let autoSpinActive = false;
+
+  const handleAutoSpinToggle = (): void => {
+    if (autoSpinActive) {
+      autoSpinActive = false;
+      gameUI?.setAutoSpinActive(false);
+      return;
+    }
+
+    autoSpinActive = true;
+    gameUI?.setAutoSpinActive(true);
+    handleSpin();
+  };
 
   const handleSpin = (): void => {
     if (isSpinning || engine.currentState !== 'IDLE' || !gameUI) return;
@@ -97,18 +110,25 @@ async function bootstrap(): Promise<void> {
       const { matrix, winAmount, winningCells } = await spinService.requestSpin(currentBet);
       await engine.playRound(matrix, MIN_SPIN_MS);
 
-      gameUI!.setBetSelectorEnabled(true);
       isSpinning = false;
 
       if (winAmount > 0) {
-        alienCharacter?.playDeath();
         engine.showWinHighlight(winningCells);
         gameUI!.winBanner.show(winAmount);
         balance += winAmount;
         gameUI!.setBalance(balance, true);
         gameUI!.setTotalWin(winAmount, true);
+        await alienCharacter?.playDeath();
       } else {
         gameUI!.setTotalWin(0);
+      }
+
+      if (autoSpinActive && balance >= gameUI!.currentBet) {
+        handleSpin();
+      } else {
+        autoSpinActive = false;
+        gameUI!.setAutoSpinActive(false);
+        gameUI!.setBetSelectorEnabled(true);
       }
     })();
   };
@@ -128,7 +148,7 @@ async function bootstrap(): Promise<void> {
     if (profileChanged || !gameUI) {
       const previousState = gameUI?.getState();
       gameUI?.destroy({ children: true });
-      gameUI = createGameUI(currentProfile, handleSpin);
+      gameUI = createGameUI(currentProfile, handleSpin, handleAutoSpinToggle);
       gameUI.zIndex = 3;
       gameRoot.addChild(gameUI);
       gameUI.applyState({

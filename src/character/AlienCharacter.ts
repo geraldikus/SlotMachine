@@ -67,8 +67,24 @@ export class AlienCharacter extends Container {
     });
   }
 
-  playDeath(): void {
-    this.spine.state.setAnimation(0, 'death', false);
+  playDeath(): Promise<void> {
+    return new Promise((resolve) => {
+      const entry = this.spine.state.setAnimation(0, 'death', false);
+      if (!entry?.animation) {
+        resolve();
+        return;
+      }
+
+      const listener = {
+        complete: (completedEntry: { animation?: { name: string } | null }) => {
+          if (completedEntry.animation?.name !== 'death') return;
+          this.spine.state.removeListener(listener);
+          resolve();
+        },
+      };
+
+      this.spine.state.addListener(listener);
+    });
   }
 
   private readonly onGlobalPointerMove = (event: FederatedPointerEvent): void => {

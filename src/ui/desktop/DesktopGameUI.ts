@@ -4,6 +4,7 @@ import { LayoutProfile } from '../../layout/types';
 import { AnimatedCounter } from '../AnimatedCounter';
 import { BetSelector } from '../BetSelector';
 import { GameUIState, IGameUI } from '../IGameUI';
+import { AutoSpinButton } from '../AutoSpinButton';
 import { SpinButton } from '../SpinButton';
 import { BALANCE_VALUE_STYLE, LABEL_STYLE, WIN_VALUE_STYLE } from '../uiStyles';
 import { WinBanner } from '../WinBanner';
@@ -14,8 +15,10 @@ export class DesktopGameUI extends Container implements IGameUI {
   private readonly balanceCounter: AnimatedCounter;
   private readonly winCounter: AnimatedCounter;
   private readonly spinButton: SpinButton;
+  private readonly autoSpinButton: AutoSpinButton;
+  private autoSpinActive = false;
 
-  constructor(profile: LayoutProfile, onSpin: () => void) {
+  constructor(profile: LayoutProfile, onSpin: () => void, onAutoSpin: () => void) {
     super();
 
     const panel = profile.getSlotFrameBounds();
@@ -31,17 +34,29 @@ export class DesktopGameUI extends Container implements IGameUI {
     });
     this.addChild(footerBg);
 
+    const gap = 12;
+    const autoWidth = 120;
+
     const spinLayout = profile.getSpinButtonLayout();
-    const betWidth = panel.width - spinLayout.width - 36;
-    const betX = panel.x + 12;
+    const spinWidth = spinLayout.width;
+    const spinX = spinLayout.x;
+    const spinY = spinLayout.y;
+    const autoX = spinX - spinWidth / 2 - gap - autoWidth / 2;
+
+    const betX = panel.x + 12
+    const betWidth = (autoX - autoWidth / 2) - gap - betX;
     const betY = footerY + (profile.footerHeight - 64) / 2;
     this.betSelector = new BetSelector(profile, betWidth, betX, betY, DEFAULT_BET);
     this.betSelector.position.set(betX, betY);
     this.addChild(this.betSelector);
 
-    this.spinButton = new SpinButton(spinLayout.width, profile, onSpin);
+    this.spinButton = new SpinButton(spinWidth, profile, 'SPIN', onSpin);
     this.spinButton.position.set(spinLayout.x, spinLayout.y);
     this.addChild(this.spinButton);
+
+    this.autoSpinButton = new AutoSpinButton(autoWidth, profile, onAutoSpin);
+    this.autoSpinButton.position.set(autoX, spinLayout.y);
+    this.addChild(this.autoSpinButton);
 
     this.winBanner = new WinBanner(profile);
     this.addChild(this.winBanner);
@@ -115,11 +130,30 @@ export class DesktopGameUI extends Container implements IGameUI {
   setBetSelectorEnabled(enabled: boolean): void {
     this.betSelector.setEnabled(enabled);
     this.spinButton.setEnabled(enabled);
+
+    if (this.autoSpinActive) {
+      // STOP mode: keep button fully bright while auto is running.
+      this.autoSpinButton.setDimmed(false);
+      return;
+    }
+
+    if (enabled) {
+      this.autoSpinButton.setDimmed(false);
+      this.autoSpinButton.setIconSpinning(false);
+    } else {
+      this.autoSpinButton.setDimmed(true);
+    }
+  }
+
+  setAutoSpinActive(active: boolean): void {
+    this.autoSpinActive = active;
+    this.autoSpinButton.setActive(active);
   }
 
   update(): void {
     this.balanceCounter.update();
     this.winCounter.update();
     this.spinButton.update();
+    this.autoSpinButton.update();
   }
 }

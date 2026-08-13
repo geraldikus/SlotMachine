@@ -12,21 +12,25 @@ export class SpinButton extends Container {
   private releaseStartTime = 0;
   private releaseFromScale = PRESS_SCALE;
   private onSpin: () => void;
+  private buttonText: string
+  private desktopFontSize: number = 32
+  private mobileFontSize: number = 28
 
-  constructor(width: number, profile: LayoutProfile, onSpin: () => void) {
+  constructor(width: number, profile: LayoutProfile, buttonText: string, onSpin: () => void) {
     super();
     this.onSpin = onSpin;
     this.buttonHeight = profile.spinButtonHeight;
     this.eventMode = 'static';
     this.cursor = 'pointer';
+    this.buttonText = buttonText
 
     const background = new Graphics();
     background.roundRect(0, 0, width, this.buttonHeight, 12).fill(0x00d9ff);
     this.addChild(background);
 
-    const fontSize = profile.id === 'desktop' ? 32 : 28;
+    const fontSize = profile.id === 'desktop' ? this.desktopFontSize : this.mobileFontSize;
     this.buttonLabel = new Text({
-      text: 'SPIN',
+      text: buttonText,
       style: {
         fontSize,
         fill: 0xffffff,
@@ -42,6 +46,11 @@ export class SpinButton extends Container {
     this.on('pointerdown', this.handlePointerDown);
     this.on('pointerup', this.handlePointerUp);
     this.on('pointerupoutside', this.handlePointerUp);
+  }
+
+  setDesktopFontSize(size: number) {
+    this.desktopFontSize = size
+    this.buttonLabel.style.fontSize = size
   }
 
   setEnabled(value: boolean): void {
