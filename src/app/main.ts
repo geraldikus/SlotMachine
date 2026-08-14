@@ -11,6 +11,7 @@ import { DesktopGameUI } from '../ui/desktop/DesktopGameUI';
 import { getSpritesheet, SpriteAtlasDebugPanel } from '../ui/debug/SpriteAtlasDebugPanel';
 import { IGameUI } from '../ui/IGameUI';
 import { MobileGameUI } from '../ui/mobile/MobileGameUI';
+import { PracticePanel } from '../ui/debug/PracticePanel';
 
 const MIN_SPIN_MS = 2000;
 
@@ -36,7 +37,7 @@ function createGameUI(profile: LayoutManager['currentProfile'], onSpin: () => vo
   if (profile.id === 'desktop') {
     return new DesktopGameUI(profile, onSpin, onAutoSpin);
   }
-  return new MobileGameUI(profile, onSpin);
+  return new MobileGameUI(profile, onSpin, onAutoSpin);
 }
 
 async function bootstrap(): Promise<void> {
@@ -66,6 +67,12 @@ async function bootstrap(): Promise<void> {
   const atlasDebugPanel = new SpriteAtlasDebugPanel(spritesheet);
   atlasDebugPanel.visible = false;
   app.stage.addChild(atlasDebugPanel);
+
+
+  const practicePanel = new PracticePanel();
+  practicePanel.position.set(12, 12);
+  app.stage.addChild(practicePanel);
+
   await loadAlienAssets();
 
   const engine = new SlotEngine(SYMBOLS, reelMaskTexture, symbolTextures);

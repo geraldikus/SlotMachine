@@ -1,6 +1,7 @@
 import { DEFAULT_BET, INITIAL_BALANCE, INITIAL_TOTAL_WIN } from '../../config/currency';
 import { LayoutProfile } from '../../layout/types';
 import { AnimatedCounter } from '../AnimatedCounter';
+import { AutoSpinButton } from '../AutoSpinButton';
 import { CurrencyUI } from '../CurrencyUI';
 import { GameUIState, IGameUI } from '../IGameUI';
 import { SpinButton } from '../SpinButton';
@@ -11,8 +12,9 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
   private readonly balanceCounter: AnimatedCounter;
   private readonly winCounter: AnimatedCounter;
   private readonly spinButton: SpinButton;
+  private readonly autoSpinButton: AutoSpinButton
 
-  constructor(profile: LayoutProfile, onSpin: () => void) {
+  constructor(profile: LayoutProfile, onSpin: () => void, onAutoSpin: () => void) {
     super(profile);
 
     this.winBanner = new WinBanner(profile);
@@ -22,10 +24,19 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
     this.winCounter = new AnimatedCounter(this.winValue, INITIAL_TOTAL_WIN);
     this.betSelector.setBet(DEFAULT_BET);
 
+    const gap = 16
     const spinLayout = profile.getSpinButtonLayout();
-    this.spinButton = new SpinButton(spinLayout.width, profile, "SPIN", onSpin);
-    this.spinButton.position.set(spinLayout.x, spinLayout.y);
+    const spinWidth = spinLayout.width / 2 - gap;
+    const spinX = profile.designWidth - profile.padding - spinWidth / 2
+    const autoSpinX = spinX - spinWidth / 2 - gap - spinWidth / 2
+
+    this.spinButton = new SpinButton(spinWidth, profile, "SPIN", onSpin);
+    this.spinButton.position.set(spinX, spinLayout.y);
     this.addChild(this.spinButton);
+
+    this.autoSpinButton = new AutoSpinButton(spinWidth, profile, onAutoSpin);
+    this.autoSpinButton.position.set(autoSpinX, spinLayout.y);
+    this.addChild(this.autoSpinButton);
   }
 
   get currentBet(): number {
@@ -60,12 +71,13 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
   }
 
   setAutoSpinActive(_active: boolean): void {
-    // Auto spin is desktop-only for now.
+    this.autoSpinButton.setActive(_active);
   }
 
   update(): void {
     this.balanceCounter.update();
     this.winCounter.update();
     this.spinButton.update();
+    this.autoSpinButton.update()
   }
 }

@@ -1,16 +1,19 @@
-import { Container, Graphics, Text } from 'pixi.js';
+import { Assets, Container, Graphics, Sprite, Text } from 'pixi.js';
 import { LayoutProfile } from '../layout/types';
 
 const PRESS_SCALE = 0.95;
 const RELEASE_DURATION_MS = 180;
-const ICON_ROTATION_SPEED = 0.12;
+const ICON_ROTATION_SPEED = 0.08;
 const DIMMED_ALPHA = 0.45;
+const ICON_SIZE = 18;
+const ICON_PATH = '/assets/icon/refresh-ccw.svg';
 
 export class AutoSpinButton extends Container {
   private readonly background: Graphics;
-  private readonly icon: Text;
+  private icon: Sprite | null = null;
   private readonly caption: Text;
   private readonly buttonHeight: number;
+  private readonly buttonWidth: number;
   private enabled = true;
   private dimmed = false;
   private iconSpinning = false;
@@ -22,6 +25,7 @@ export class AutoSpinButton extends Container {
   constructor(width: number, profile: LayoutProfile, onToggle: () => void) {
     super();
     this.onToggle = onToggle;
+    this.buttonWidth = width;
     this.buttonHeight = profile.spinButtonHeight;
     this.eventMode = 'static';
     this.cursor = 'pointer';
@@ -31,18 +35,6 @@ export class AutoSpinButton extends Container {
     this.addChild(this.background);
 
     const fontSize = profile.id === 'desktop' ? 24 : 22;
-
-    this.icon = new Text({
-      text: '↻',
-      style: {
-        fontSize: fontSize + 4,
-        fill: 0xffffff,
-        fontWeight: 'bold',
-      },
-    });
-    this.icon.anchor.set(0.5);
-    this.icon.position.set(width * 0.2, this.buttonHeight / 2);
-    this.addChild(this.icon);
 
     this.caption = new Text({
       text: 'AUTO',
@@ -58,9 +50,25 @@ export class AutoSpinButton extends Container {
 
     this.pivot.set(width / 2, this.buttonHeight / 2);
 
+    void this.loadIcon();
+
     this.on('pointerdown', this.handlePointerDown);
     this.on('pointerup', this.handlePointerUp);
     this.on('pointerupoutside', this.handlePointerUp);
+  }
+
+  private async loadIcon(): Promise<void> {
+    const texture = await Assets.load(ICON_PATH);
+    this.icon = new Sprite(texture);
+    this.icon.width = ICON_SIZE;
+    this.icon.height = ICON_SIZE;
+    this.icon.anchor.set(0.5);
+    this.icon.position.set(this.buttonWidth * 0.2, this.buttonHeight / 2);
+    this.addChild(this.icon);
+
+    if (this.dimmed) {
+      this.icon.alpha = 1;
+    }
   }
 
   /** Dim background + caption, keep icon bright. Button stays clickable. */
@@ -68,12 +76,14 @@ export class AutoSpinButton extends Container {
     this.dimmed = value;
     this.background.alpha = value ? DIMMED_ALPHA : 1;
     this.caption.alpha = value ? DIMMED_ALPHA : 1;
-    this.icon.alpha = 1;
+    if (this.icon) {
+      this.icon.alpha = 1;
+    }
   }
 
   setIconSpinning(value: boolean): void {
     this.iconSpinning = value;
-    if (!value) {
+    if (!value && this.icon) {
       this.icon.rotation = 0;
     }
   }
@@ -97,18 +107,22 @@ export class AutoSpinButton extends Container {
       this.scale.set(1);
       this.background.alpha = DIMMED_ALPHA;
       this.caption.alpha = DIMMED_ALPHA;
-      this.icon.alpha = DIMMED_ALPHA;
+      if (this.icon) {
+        this.icon.alpha = DIMMED_ALPHA;
+      }
     } else if (!this.dimmed) {
       this.background.alpha = 1;
       this.caption.alpha = 1;
-      this.icon.alpha = 1;
+      if (this.icon) {
+        this.icon.alpha = 1;
+      }
     } else {
       this.setDimmed(true);
     }
   }
 
   update(): void {
-    if (this.iconSpinning) {
+    if (this.iconSpinning && this.icon) {
       this.icon.rotation += ICON_ROTATION_SPEED;
     }
 
