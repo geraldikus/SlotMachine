@@ -3,7 +3,7 @@ import { DEFAULT_BET, INITIAL_BALANCE } from '../config/currency';
 import { SYMBOLS } from '../config/symbols';
 import { loadSymbolTextures } from '../assets/loadSymbols';
 import { AlienCharacter, loadAlienAssets } from '../character';
-import { REEL_HEIGHT, REEL_WIDTH } from '../config/types';
+import { AppScreen, REEL_HEIGHT, REEL_WIDTH } from '../config/types';
 import { SlotEngine } from '../engine/SlotEngine';
 import { LayoutManager } from '../layout/LayoutManager';
 import { SpinService } from '../services/SpinService';
@@ -12,8 +12,11 @@ import { getSpritesheet, SpriteAtlasDebugPanel } from '../ui/debug/SpriteAtlasDe
 import { IGameUI } from '../ui/IGameUI';
 import { MobileGameUI } from '../ui/mobile/MobileGameUI';
 import { PracticePanel } from '../ui/debug/PracticePanel';
+import { LaunchView } from '../ui/launch/LaunchView';
 
 const MIN_SPIN_MS = 2000;
+
+let appScreen: AppScreen = 'loading';
 
 function createReelMaskTexture(app: Application): Texture {
   const container = new Container();
@@ -33,7 +36,11 @@ function createReelMaskTexture(app: Application): Texture {
   return texture;
 }
 
-function createGameUI(profile: LayoutManager['currentProfile'], onSpin: () => void, onAutoSpin: () => void): IGameUI & Container {
+function createGameUI(
+  profile: LayoutManager['currentProfile'],
+  onSpin: () => void,
+  onAutoSpin: () => void,
+): IGameUI & Container {
   if (profile.id === 'desktop') {
     return new DesktopGameUI(profile, onSpin, onAutoSpin);
   }
@@ -54,12 +61,35 @@ async function bootstrap(): Promise<void> {
     resizeTo: window,
   });
   app.ticker.maxFPS = 60;
+  app.canvas.id = 'game-canvas';
   document.body.appendChild(app.canvas);
   app.stage.sortableChildren = true;
 
+  const launchView = new LaunchView();
+  launchView.zIndex = 1000;
+  app.stage.addChild(launchView);
+
   const gameRoot = new Container();
   gameRoot.sortableChildren = true;
+  gameRoot.visible = false;
+  gameRoot.zIndex = 1;
   app.stage.addChild(gameRoot);
+
+  const setAppScreen = (next: AppScreen): void => {
+    appScreen = next;
+
+    if (next === 'loading') {
+      launchView.visible = true;
+      gameRoot.visible = false;
+    }
+
+    if (next === 'playing') {
+      launchView.hide();
+      gameRoot.visible = true;
+    }
+  };
+
+  setAppScreen('loading'); // loading
 
   const reelMaskTexture = createReelMaskTexture(app);
   const symbolTextures = await loadSymbolTextures();
@@ -68,9 +98,9 @@ async function bootstrap(): Promise<void> {
   atlasDebugPanel.visible = false;
   app.stage.addChild(atlasDebugPanel);
 
-
   const practicePanel = new PracticePanel();
   practicePanel.position.set(12, 12);
+  practicePanel.visible = false;
   app.stage.addChild(practicePanel);
 
   await loadAlienAssets();
@@ -183,13 +213,11 @@ async function bootstrap(): Promise<void> {
         alienCharacter.applyLayout(alienLayout);
       }
     }
-
-    // atlasDebugPanel.visible = isDesktop;
-    // if (isDesktop) {
-    //   atlasDebugPanel.layout(window.innerWidth, window.innerHeight);
-    // }
   }
 
+  // await launchView.waitUntilReady(); 
+  setAppScreen('playing');
+  practicePanel.visible = true;
   layoutScene(false);
 
   window.addEventListener('resize', () => {

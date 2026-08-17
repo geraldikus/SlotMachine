@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@esotericsoftware/spine-pixi-v8": "^4.3.13",
+    "@lottiefiles/dotlottie-web": "^0.79.1",
     "pixi.js": "^8.0.0"
   },
   "devDependencies": {

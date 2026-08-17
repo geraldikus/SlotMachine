@@ -20,6 +20,9 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
     this.winBanner = new WinBanner(profile);
     this.addChild(this.winBanner);
 
+    const contentWidth = profile.getContentWidth();
+    const statBoxWidth = (contentWidth - profile.statsGap) / 2;
+
     this.balanceCounter = new AnimatedCounter(this.balanceValue, INITIAL_BALANCE);
     this.winCounter = new AnimatedCounter(this.winValue, INITIAL_TOTAL_WIN);
     this.betSelector.setBet(DEFAULT_BET);
@@ -28,7 +31,7 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
     const spinLayout = profile.getSpinButtonLayout();
     const spinWidth = spinLayout.width / 2 - gap;
     const spinX = profile.designWidth - profile.padding - spinWidth / 2
-    const autoSpinX = spinX - spinWidth / 2 - gap - spinWidth / 2
+    const autoSpinX = profile.padding + statBoxWidth / 2;
 
     this.spinButton = new SpinButton(spinWidth, profile, "SPIN", onSpin);
     this.spinButton.position.set(spinX, spinLayout.y);

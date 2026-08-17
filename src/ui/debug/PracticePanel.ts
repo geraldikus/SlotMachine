@@ -11,7 +11,6 @@ export class PracticePanel extends Container {
 
         const title = new Text({ text: 'DEMO PANEL', style: { fill: 0xffffff, fontSize: 14 } });
         title.position.set(padding, y)
-        this.addChild(title)
 
         y += title.height + gap;
 
@@ -19,7 +18,9 @@ export class PracticePanel extends Container {
             this.printTest(1)
         })
         btn1.position.set(padding, y + 24)
-        this.addChild(btn1)
+
+        // this.addChild(title)
+        // this.addChild(btn1)
     }
 
     printTest(btnNumber: number) {

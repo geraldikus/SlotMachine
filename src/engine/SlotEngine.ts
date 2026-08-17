@@ -26,6 +26,9 @@ export class SlotEngine extends Container {
   private highlightedCells: SymbolCell[] = [];
   private dimmedCells: SymbolCell[] = [];
   private readonly winLineOverlay = new WinLineOverlay();
+  private pulseValue = 1.0;
+  private lastPulseUpdate = 0;
+  private readonly PULSE_UPDATE_INTERVAL = 16
 
   constructor(
     symbolKeys: SymbolKey[],
@@ -166,13 +169,16 @@ export class SlotEngine extends Container {
   private updateWinPulse(): void {
     if (this.highlightedCells.length === 0) return;
 
-    const pulse = 1 + Math.sin(performance.now() / 200) * 0.12;
+    const now = performance.now();
 
-    for (const cell of this.highlightedCells) {
-      cell.setPulseScale(pulse);
+    if (now - this.lastPulseUpdate >= this.PULSE_UPDATE_INTERVAL) {
+      this.pulseValue = 1 + Math.sin(now / 200) * 0.12;
+      this.lastPulseUpdate = now;
     }
 
-    this.winLineOverlay.update();
+    for (const cell of this.highlightedCells) {
+      cell.setPulseScale(this.pulseValue);
+    }
   }
 
   private onReelStopped(): void {

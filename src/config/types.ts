@@ -30,3 +30,5 @@ export const CASCADE_DELAY_MS = 200;
 export interface TextureMap {
   get(key: SymbolKey): import('pixi.js').Texture;
 }
+
+export type AppScreen = 'loading' | 'playing' | 'error';
