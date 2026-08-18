@@ -5,10 +5,12 @@ import { AutoSpinButton } from '../AutoSpinButton';
 import { CurrencyUI } from '../CurrencyUI';
 import { GameUIState, IGameUI } from '../IGameUI';
 import { SpinButton } from '../SpinButton';
+import { ErrorBanner } from '../ErrorBanner';
 import { WinBanner } from '../WinBanner';
 
 export class MobileGameUI extends CurrencyUI implements IGameUI {
   readonly winBanner: WinBanner;
+  private readonly errorBanner: ErrorBanner;
   private readonly balanceCounter: AnimatedCounter;
   private readonly winCounter: AnimatedCounter;
   private readonly spinButton: SpinButton;
@@ -19,6 +21,10 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
 
     this.winBanner = new WinBanner(profile);
     this.addChild(this.winBanner);
+
+    this.errorBanner = new ErrorBanner(profile);
+    this.errorBanner.position.y += 52;
+    this.addChild(this.errorBanner);
 
     const contentWidth = profile.getContentWidth();
     const statBoxWidth = (contentWidth - profile.statsGap) / 2;
@@ -75,6 +81,15 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
 
   setAutoSpinActive(_active: boolean): void {
     this.autoSpinButton.setActive(_active);
+  }
+
+  showError(message: string): void {
+    this.winBanner.hide();
+    this.errorBanner.show(message);
+  }
+
+  hideError(): void {
+    this.errorBanner.hide();
   }
 
   update(): void {

@@ -75,20 +75,49 @@ export class SlotEngine extends Container {
     return this.pendingMatrix;
   }
 
-  spin(matrix: ResultMatrix): void {
+  getVisibleMatrix(): ResultMatrix {
+    const matrix: ResultMatrix = [[], [], []];
+
+    for (let col = 0; col < REEL_COUNT; col += 1) {
+      const [top, middle, bottom] = this.reels[col].getVisibleSymbols();
+      matrix[0][col] = top;
+      matrix[1][col] = middle;
+      matrix[2][col] = bottom;
+    }
+
+    return matrix;
+  }
+
+  startSpin(): void {
     if (this.state !== 'IDLE') return;
 
     this.clearWinHighlight();
-    this.pendingMatrix = matrix;
+    this.pendingMatrix = null;
     this.state = 'SPINNING';
     this.stoppedReelCount = 0;
     this.reels.forEach((reel) => reel.startSpin());
   }
 
-  beginStopSequence(): void {
-    if (this.state !== 'SPINNING' || !this.pendingMatrix) return;
+  stopWithMatrix(matrix: ResultMatrix): void {
+    if (this.state !== 'SPINNING') return;
 
-    this.stop(this.pendingMatrix);
+    this.pendingMatrix = matrix;
+    this.stop(matrix);
+  }
+
+  waitUntilIdle(): Promise<void> {
+    if (this.state === 'IDLE') {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      const onComplete = (): void => {
+        this.off('allStopped', onComplete);
+        resolve();
+      };
+
+      this.on('allStopped', onComplete);
+    });
   }
 
   playRound(matrix: ResultMatrix, minSpinMs = DEFAULT_MIN_SPIN_MS): Promise<void> {
@@ -99,10 +128,10 @@ export class SlotEngine extends Container {
       };
 
       this.on('allStopped', onComplete);
-      this.spin(matrix);
+      this.startSpin();
 
       window.setTimeout(() => {
-        this.beginStopSequence();
+        this.stopWithMatrix(matrix);
       }, minSpinMs);
     });
   }

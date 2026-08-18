@@ -80,6 +80,14 @@ export class Reel extends Container {
     return cell;
   }
 
+  getVisibleSymbols(): SymbolKey[] {
+    return [
+      this.getVisibleCell(0).getSymbol(),
+      this.getVisibleCell(1).getSymbol(),
+      this.getVisibleCell(2).getSymbol(),
+    ];
+  }
+
   startSpin(): void {
     this.phase = 'spinning';
     this.isSpinning = true;

@@ -7,6 +7,7 @@ import { AppScreen, REEL_HEIGHT, REEL_WIDTH } from '../config/types';
 import { SlotEngine } from '../engine/SlotEngine';
 import { LayoutManager } from '../layout/LayoutManager';
 import { SpinService } from '../services/SpinService';
+import { SpinRoundController } from '../services/SpinRoundController';
 import { DesktopGameUI } from '../ui/desktop/DesktopGameUI';
 import { getSpritesheet, SpriteAtlasDebugPanel } from '../ui/debug/SpriteAtlasDebugPanel';
 import { IGameUI } from '../ui/IGameUI';
@@ -98,17 +99,18 @@ async function bootstrap(): Promise<void> {
   atlasDebugPanel.visible = false;
   app.stage.addChild(atlasDebugPanel);
 
-  const practicePanel = new PracticePanel();
-  practicePanel.position.set(12, 12);
-  practicePanel.visible = false;
-  app.stage.addChild(practicePanel);
-
   await loadAlienAssets();
 
   const engine = new SlotEngine(SYMBOLS, reelMaskTexture, symbolTextures);
   engine.zIndex = 1;
   gameRoot.addChild(engine);
   const spinService = new SpinService();
+  const spinRoundController = new SpinRoundController(engine, spinService, MIN_SPIN_MS);
+
+  const practicePanel = new PracticePanel(spinService);
+  practicePanel.position.set(12, 12);
+  practicePanel.visible = false;
+  app.stage.addChild(practicePanel);
 
   let balance = INITIAL_BALANCE;
   let currentBet: number = DEFAULT_BET;
@@ -134,8 +136,10 @@ async function bootstrap(): Promise<void> {
 
     void (async () => {
       isSpinning = true;
+      practicePanel.clearArmedVisuals();
       engine.clearWinHighlight();
       gameUI!.winBanner.hide();
+      gameUI!.hideError();
 
       alienCharacter?.playHit();
 
@@ -144,10 +148,21 @@ async function bootstrap(): Promise<void> {
       gameUI!.setBalance(balance, true);
       gameUI!.setBetSelectorEnabled(false);
 
-      const { matrix, winAmount, winningCells } = await spinService.requestSpin(currentBet);
-      await engine.playRound(matrix, MIN_SPIN_MS);
+      const roundResult = await spinRoundController.playRound(currentBet);
 
       isSpinning = false;
+
+      if (!roundResult.ok) {
+        balance += currentBet;
+        gameUI!.setBalance(balance, true);
+        gameUI!.showError(roundResult.error.message);
+        autoSpinActive = false;
+        gameUI!.setAutoSpinActive(false);
+        gameUI!.setBetSelectorEnabled(true);
+        return;
+      }
+
+      const { winAmount, winningCells } = roundResult.response;
 
       if (winAmount > 0) {
         engine.showWinHighlight(winningCells);

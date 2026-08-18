@@ -7,10 +7,12 @@ import { GameUIState, IGameUI } from '../IGameUI';
 import { AutoSpinButton } from '../AutoSpinButton';
 import { SpinButton } from '../SpinButton';
 import { BALANCE_VALUE_STYLE, LABEL_STYLE, WIN_VALUE_STYLE } from '../uiStyles';
+import { ErrorBanner } from '../ErrorBanner';
 import { WinBanner } from '../WinBanner';
 
 export class DesktopGameUI extends Container implements IGameUI {
   readonly winBanner: WinBanner;
+  private readonly errorBanner: ErrorBanner;
   private readonly betSelector: BetSelector;
   private readonly balanceCounter: AnimatedCounter;
   private readonly winCounter: AnimatedCounter;
@@ -60,6 +62,10 @@ export class DesktopGameUI extends Container implements IGameUI {
 
     this.winBanner = new WinBanner(profile);
     this.addChild(this.winBanner);
+
+    this.errorBanner = new ErrorBanner(profile);
+    this.errorBanner.position.y += 52;
+    this.addChild(this.errorBanner);
   }
 
   private createTopBar(
@@ -148,6 +154,15 @@ export class DesktopGameUI extends Container implements IGameUI {
   setAutoSpinActive(active: boolean): void {
     this.autoSpinActive = active;
     this.autoSpinButton.setActive(active);
+  }
+
+  showError(message: string): void {
+    this.winBanner.hide();
+    this.errorBanner.show(message);
+  }
+
+  hideError(): void {
+    this.errorBanner.hide();
   }
 
   update(): void {

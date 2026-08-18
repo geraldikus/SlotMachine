@@ -1,29 +1,60 @@
-import { Container, Text } from "pixi.js";
-import { DemoButton } from "./DemoButton";
+import { Container, Text } from 'pixi.js';
+import { SpinMockMode, SpinService } from '../../services/SpinService';
+import { DemoButton } from './DemoButton';
 
 export class PracticePanel extends Container {
-    constructor() {
-        super()
+  private readonly slowBtn: DemoButton;
+  private readonly errorBtn: DemoButton;
+  private readonly spinService: SpinService;
+  private armedMode: SpinMockMode | null = null;
 
-        const padding = 12
-        const gap = 8
-        let y = padding
+  constructor(spinService: SpinService) {
+    super();
+    this.spinService = spinService;
 
-        const title = new Text({ text: 'DEMO PANEL', style: { fill: 0xffffff, fontSize: 14 } });
-        title.position.set(padding, y)
+    const padding = 12;
+    const gap = 8;
+    const buttonWidth = 160;
+    const buttonHeight = 36;
+    let y = padding;
 
-        y += title.height + gap;
+    const title = new Text({ text: 'DEMO PANEL', style: { fill: 0xffffff, fontSize: 14 } });
+    title.position.set(padding, y);
+    this.addChild(title);
 
-        const btn1 = new DemoButton('Button 1', 100, 40, () => {
-            this.printTest(1)
-        })
-        btn1.position.set(padding, y + 24)
+    y += title.height + gap;
 
-        // this.addChild(title)
-        // this.addChild(btn1)
+    this.slowBtn = new DemoButton('Slow next', buttonWidth, buttonHeight, () => this.toggleMode('slow'));
+    this.slowBtn.position.set(padding, y);
+    this.addChild(this.slowBtn);
+
+    y += buttonHeight + gap;
+
+    this.errorBtn = new DemoButton('Error next', buttonWidth, buttonHeight, () => this.toggleMode('error'));
+    this.errorBtn.position.set(padding, y);
+    this.addChild(this.errorBtn);
+  }
+
+  /** Сбрасывает подсветку после того, как режим применён к спину. */
+  clearArmedVisuals(): void {
+    this.armedMode = null;
+    this.updateButtonStates();
+  }
+
+  private toggleMode(mode: SpinMockMode): void {
+    if (this.armedMode === mode) {
+      this.spinService.disarmNextSpin();
+      this.armedMode = null;
+    } else {
+      this.spinService.armNextSpin(mode);
+      this.armedMode = mode;
     }
 
-    printTest(btnNumber: number) {
-        console.log(`Button ${btnNumber} pressed`)
-    }
+    this.updateButtonStates();
+  }
+
+  private updateButtonStates(): void {
+    this.slowBtn.setActive(this.armedMode === 'slow');
+    this.errorBtn.setActive(this.armedMode === 'error');
+  }
 }
