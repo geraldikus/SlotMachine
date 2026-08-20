@@ -1,5 +1,6 @@
 import { DEFAULT_BET, INITIAL_BALANCE, INITIAL_TOTAL_WIN } from '../../config/currency';
 import { LayoutProfile } from '../../layout/types';
+import { SoundService } from '../../services/SoundService';
 import { AnimatedCounter } from '../AnimatedCounter';
 import { AutoSpinButton } from '../AutoSpinButton';
 import { CurrencyUI } from '../CurrencyUI';
@@ -16,8 +17,13 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
   private readonly spinButton: SpinButton;
   private readonly autoSpinButton: AutoSpinButton
 
-  constructor(profile: LayoutProfile, onSpin: () => void, onAutoSpin: () => void) {
-    super(profile);
+  constructor(
+    profile: LayoutProfile,
+    onSpin: () => void,
+    onAutoSpin: () => void,
+    soundService: SoundService,
+  ) {
+    super(profile, soundService);
 
     this.winBanner = new WinBanner(profile);
     this.addChild(this.winBanner);

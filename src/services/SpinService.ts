@@ -39,20 +39,15 @@ export class SpinService {
   private spinCount = 0;
   private nextMockMode: SpinMockMode | null = null;
 
-  constructor(private readonly symbols: SymbolKey[] = SYMBOLS) {}
+  constructor(private readonly symbols: SymbolKey[] = SYMBOLS) { }
 
   /** Следующий спин ответит медленно или упадёт с ошибкой (один раз). */
   armNextSpin(mode: SpinMockMode): void {
     this.nextMockMode = mode;
   }
 
-  disarmNextSpin(): void {
-    this.nextMockMode = null;
-  }
-
   /**
    * Имитация ответа сервера с сетевой задержкой.
-   * В продакшене заменить на fetch('/api/spin').
    */
   async requestSpin(bet: number): Promise<SpinResponse> {
     const mockMode = this.nextMockMode;

@@ -1,7 +1,9 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import { formatFun } from '../config/currency';
 import { LayoutProfile } from '../layout/types';
+import { SoundService } from '../services/SoundService';
 import { BetSelector } from './BetSelector';
+import { SoundSettingsPopover } from './SoundSettingsPopover';
 
 const LABEL_STYLE = {
   fontFamily: 'Arial, sans-serif',
@@ -17,19 +19,59 @@ const VALUE_STYLE = {
   fontWeight: 'bold' as const,
 };
 
+const SETTINGS_BUTTON_SIZE = 44;
+const HEADER_GAP = 8;
+
 export class CurrencyUI extends Container {
   readonly balanceValue: Text;
   readonly betSelector: BetSelector;
   readonly winValue: Text;
+  private readonly soundSettings?: SoundSettingsPopover;
 
-  constructor(profile: LayoutProfile) {
+  constructor(profile: LayoutProfile, soundService?: SoundService) {
     super();
 
     const contentWidth = profile.getContentWidth();
+    const settingsOffset = soundService ? SETTINGS_BUTTON_SIZE + HEADER_GAP : 0;
+    const balancePanelWidth = contentWidth - settingsOffset;
+
+    if (soundService) {
+      const settingsButton = new Container();
+      settingsButton.eventMode = 'static';
+      settingsButton.cursor = 'pointer';
+
+      const settingsBg = new Graphics();
+      settingsBg.roundRect(0, 0, SETTINGS_BUTTON_SIZE, 56, 10).fill({ color: 0x2a2a4a });
+      settingsButton.addChild(settingsBg);
+
+      const settingsIcon = new Text({
+        text: '⚙️',
+        style: {
+          fontFamily: 'Arial, sans-serif',
+          fontSize: 22,
+        },
+      });
+      settingsIcon.anchor.set(0.5);
+      settingsIcon.position.set(SETTINGS_BUTTON_SIZE / 2, 28);
+      settingsButton.addChild(settingsIcon);
+
+      this.soundSettings = new SoundSettingsPopover(soundService);
+      this.soundSettings.position.set(profile.padding + 10, profile.padding + 56 + 12);
+      this.soundSettings.zIndex = 10;
+
+      settingsButton.on('pointertap', () => {
+        this.soundSettings?.toggle();
+      });
+
+      settingsButton.position.set(profile.padding, profile.padding);
+      this.sortableChildren = true;
+      this.addChild(settingsButton);
+      this.addChild(this.soundSettings);
+    }
 
     const balancePanel = new Container();
     const balanceBg = new Graphics();
-    balanceBg.roundRect(0, 0, contentWidth, 56, 10).fill({ color: 0x2a2a4a });
+    balanceBg.roundRect(0, 0, balancePanelWidth, 56, 10).fill({ color: 0x2a2a4a });
     balancePanel.addChild(balanceBg);
 
     const balanceLabel = new Text({
@@ -50,7 +92,7 @@ export class CurrencyUI extends Container {
     this.balanceValue.position.set(16, 26);
     balancePanel.addChild(this.balanceValue);
 
-    balancePanel.position.set(profile.padding, profile.padding);
+    balancePanel.position.set(profile.padding + settingsOffset, profile.padding);
     this.addChild(balancePanel);
 
     const statBoxWidth = (contentWidth - profile.statsGap) / 2;
@@ -68,6 +110,10 @@ export class CurrencyUI extends Container {
     this.betSelector = new BetSelector(profile, statBoxWidth, statsX, statsY, 0);
     this.betSelector.position.set(statsX, statsY);
     this.addChild(this.betSelector);
+  }
+
+  closeSoundSettings(): void {
+    this.soundSettings?.close();
   }
 
   private createStatBox(

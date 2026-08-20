@@ -6,6 +6,7 @@ import { AlienCharacter, loadAlienAssets } from '../character';
 import { AppScreen, REEL_HEIGHT, REEL_WIDTH } from '../config/types';
 import { SlotEngine } from '../engine/SlotEngine';
 import { LayoutManager } from '../layout/LayoutManager';
+import { SoundService } from '../services/SoundService';
 import { SpinService } from '../services/SpinService';
 import { SpinRoundController } from '../services/SpinRoundController';
 import { DesktopGameUI } from '../ui/desktop/DesktopGameUI';
@@ -14,6 +15,7 @@ import { IGameUI } from '../ui/IGameUI';
 import { MobileGameUI } from '../ui/mobile/MobileGameUI';
 import { PracticePanel } from '../ui/debug/PracticePanel';
 import { LaunchView } from '../ui/launch/LaunchView';
+import { SoundControls } from '../ui/SoundControls';
 
 const MIN_SPIN_MS = 2000;
 
@@ -41,11 +43,12 @@ function createGameUI(
   profile: LayoutManager['currentProfile'],
   onSpin: () => void,
   onAutoSpin: () => void,
+  soundService: SoundService,
 ): IGameUI & Container {
   if (profile.id === 'desktop') {
     return new DesktopGameUI(profile, onSpin, onAutoSpin);
   }
-  return new MobileGameUI(profile, onSpin, onAutoSpin);
+  return new MobileGameUI(profile, onSpin, onAutoSpin, soundService);
 }
 
 async function bootstrap(): Promise<void> {
@@ -101,6 +104,24 @@ async function bootstrap(): Promise<void> {
 
   await loadAlienAssets();
 
+  const soundService = new SoundService();
+  await soundService.init();
+
+  const soundControls = new SoundControls(soundService);
+  soundControls.zIndex = 50;
+  soundControls.visible = layoutManager.currentProfile.id === 'desktop';
+  app.stage.addChild(soundControls);
+
+  const layoutSoundControls = (): void => {
+    const isDesktop = layoutManager.currentProfile.id === 'desktop';
+    soundControls.visible = isDesktop;
+    soundControls.eventMode = isDesktop ? 'static' : 'none';
+    if (isDesktop) {
+      soundControls.layout(window.innerWidth, window.innerHeight);
+    }
+  };
+  layoutSoundControls();
+
   const engine = new SlotEngine(SYMBOLS, reelMaskTexture, symbolTextures);
   engine.zIndex = 1;
   gameRoot.addChild(engine);
@@ -136,6 +157,11 @@ async function bootstrap(): Promise<void> {
 
     void (async () => {
       isSpinning = true;
+      try {
+        await soundService.ensureUnlocked();
+      } catch {
+        // Audio unlock may fail on some mobile browsers; spin should still work.
+      }
       practicePanel.clearArmedVisuals();
       engine.clearWinHighlight();
       gameUI!.winBanner.hide();
@@ -167,6 +193,7 @@ async function bootstrap(): Promise<void> {
       if (winAmount > 0) {
         engine.showWinHighlight(winningCells);
         gameUI!.winBanner.show(winAmount);
+        soundService.playWin();
         balance += winAmount;
         gameUI!.setBalance(balance, true);
         gameUI!.setTotalWin(winAmount, true);
@@ -200,7 +227,7 @@ async function bootstrap(): Promise<void> {
     if (profileChanged || !gameUI) {
       const previousState = gameUI?.getState();
       gameUI?.destroy({ children: true });
-      gameUI = createGameUI(currentProfile, handleSpin, handleAutoSpinToggle);
+      gameUI = createGameUI(currentProfile, handleSpin, handleAutoSpinToggle, soundService);
       gameUI.zIndex = 3;
       gameRoot.addChild(gameUI);
       gameUI.applyState({
@@ -238,12 +265,14 @@ async function bootstrap(): Promise<void> {
   window.addEventListener('resize', () => {
     const profileChanged = layoutManager.refreshProfile();
     layoutScene(profileChanged);
+    layoutSoundControls();
     if (atlasDebugPanel.visible) {
       atlasDebugPanel.layout(window.innerWidth, window.innerHeight);
     }
   });
 
   app.renderer.on('resize', () => {
+    layoutSoundControls();
     if (atlasDebugPanel.visible) {
       atlasDebugPanel.layout(window.innerWidth, window.innerHeight);
     }
