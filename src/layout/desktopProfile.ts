@@ -14,15 +14,15 @@ const SLOT_SCALE = 1.02;
 export const ALIEN_ZONE_WIDTH = 180;
 
 const CHROME_WIDTH = (GRID_WIDTH + SLOT_FRAME_PADDING * 2) * SLOT_SCALE;
-const SLOT_COLUMN_OFFSET = ALIEN_ZONE_WIDTH;
-const DESIGN_WIDTH = SLOT_COLUMN_OFFSET + CHROME_WIDTH + PADDING * 2;
+const DESIGN_WIDTH = 1024;
 
 const SCALED_SLOT_HEIGHT = REEL_HEIGHT * SLOT_SCALE;
 const DESIGN_HEIGHT =
   PADDING + HEADER_HEIGHT + SLOT_GAP + SCALED_SLOT_HEIGHT + SLOT_GAP + FOOTER_HEIGHT + PADDING;
 
 function getPanelBounds(): { x: number; width: number } {
-  return { x: PADDING + SLOT_COLUMN_OFFSET, width: CHROME_WIDTH };
+  const slotX = (DESIGN_WIDTH - CHROME_WIDTH) / 2;
+  return { x: slotX, width: CHROME_WIDTH };
 }
 
 export const desktopProfile: LayoutProfile = {
@@ -55,8 +55,9 @@ export const desktopProfile: LayoutProfile = {
   },
 
   getSlotPosition(_scaleX: number, _scaleY: number): { x: number; y: number } {
+    const slotX = (DESIGN_WIDTH - CHROME_WIDTH) / 2 + SLOT_FRAME_PADDING * SLOT_SCALE;
     return {
-      x: PADDING + SLOT_COLUMN_OFFSET + SLOT_FRAME_PADDING * SLOT_SCALE,
+      x: slotX,
       y: PADDING + HEADER_HEIGHT + SLOT_GAP,
     };
   },
@@ -90,5 +91,9 @@ export const desktopProfile: LayoutProfile = {
       y: slotTop + SCALED_SLOT_HEIGHT * 0.98,
       scale: 0.45,
     };
+  },
+
+  getPracticePanelButtonWidth(): number {
+    return 160;
   },
 };

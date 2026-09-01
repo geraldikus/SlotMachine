@@ -46,6 +46,11 @@ export class SpinService {
     this.nextMockMode = mode;
   }
 
+  /** Отменяет armed режим. */
+  disarmNextSpin(): void {
+    this.nextMockMode = null;
+  }
+
   /**
    * Имитация ответа сервера с сетевой задержкой.
    */

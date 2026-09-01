@@ -27,6 +27,7 @@ export interface LayoutProfile {
   getSpinButtonLayout(): { width: number; x: number; y: number };
   getWinBannerPosition(): { x: number; y: number; width: number };
   getAlienLayout?(): AlienLayout;
+  getPracticePanelButtonWidth(): number;
 }
 
 const SLOT_HEIGHT_STRETCH = 1.15;

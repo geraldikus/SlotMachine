@@ -26,46 +26,19 @@ export class CurrencyUI extends Container {
   readonly balanceValue: Text;
   readonly betSelector: BetSelector;
   readonly winValue: Text;
-  private readonly soundSettings?: SoundSettingsPopover;
+  readonly soundSettings?: SoundSettingsPopover;
 
-  constructor(profile: LayoutProfile, soundService?: SoundService) {
+  constructor(profile: LayoutProfile, soundService?: SoundService, leftOffset = 0, rightOffset = 0) {
     super();
 
     const contentWidth = profile.getContentWidth();
-    const settingsOffset = soundService ? SETTINGS_BUTTON_SIZE + HEADER_GAP : 0;
-    const balancePanelWidth = contentWidth - settingsOffset;
+    const balancePanelWidth = contentWidth - leftOffset - rightOffset;
 
     if (soundService) {
-      const settingsButton = new Container();
-      settingsButton.eventMode = 'static';
-      settingsButton.cursor = 'pointer';
-
-      const settingsBg = new Graphics();
-      settingsBg.roundRect(0, 0, SETTINGS_BUTTON_SIZE, 56, 10).fill({ color: 0x2a2a4a });
-      settingsButton.addChild(settingsBg);
-
-      const settingsIcon = new Text({
-        text: '⚙️',
-        style: {
-          fontFamily: 'Arial, sans-serif',
-          fontSize: 22,
-        },
-      });
-      settingsIcon.anchor.set(0.5);
-      settingsIcon.position.set(SETTINGS_BUTTON_SIZE / 2, 28);
-      settingsButton.addChild(settingsIcon);
-
       this.soundSettings = new SoundSettingsPopover(soundService);
       this.soundSettings.position.set(profile.padding + 10, profile.padding + 56 + 12);
       this.soundSettings.zIndex = 10;
-
-      settingsButton.on('pointertap', () => {
-        this.soundSettings?.toggle();
-      });
-
-      settingsButton.position.set(profile.padding, profile.padding);
       this.sortableChildren = true;
-      this.addChild(settingsButton);
       this.addChild(this.soundSettings);
     }
 
@@ -92,7 +65,7 @@ export class CurrencyUI extends Container {
     this.balanceValue.position.set(16, 26);
     balancePanel.addChild(this.balanceValue);
 
-    balancePanel.position.set(profile.padding + settingsOffset, profile.padding);
+    balancePanel.position.set(profile.padding + leftOffset, profile.padding);
     this.addChild(balancePanel);
 
     const statBoxWidth = (contentWidth - profile.statsGap) / 2;

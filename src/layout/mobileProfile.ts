@@ -56,4 +56,8 @@ export const mobileProfile: LayoutProfile = {
       width: this.getContentWidth(),
     };
   },
+
+  getPracticePanelButtonWidth(): number {
+    return 140;
+  },
 };

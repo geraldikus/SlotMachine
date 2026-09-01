@@ -44,11 +44,12 @@ function createGameUI(
   onSpin: () => void,
   onAutoSpin: () => void,
   soundService: SoundService,
+  spinService: SpinService,
 ): IGameUI & Container {
   if (profile.id === 'desktop') {
     return new DesktopGameUI(profile, onSpin, onAutoSpin);
   }
-  return new MobileGameUI(profile, onSpin, onAutoSpin, soundService);
+  return new MobileGameUI(profile, onSpin, onAutoSpin, soundService, spinService);
 }
 
 async function bootstrap(): Promise<void> {
@@ -163,6 +164,9 @@ async function bootstrap(): Promise<void> {
         // Audio unlock may fail on some mobile browsers; spin should still work.
       }
       practicePanel.clearArmedVisuals();
+      if (gameUI && 'clearDemoPanelArmedVisuals' in gameUI) {
+        (gameUI as any).clearDemoPanelArmedVisuals();
+      }
       engine.clearWinHighlight();
       gameUI!.winBanner.hide();
       gameUI!.hideError();
@@ -227,7 +231,7 @@ async function bootstrap(): Promise<void> {
     if (profileChanged || !gameUI) {
       const previousState = gameUI?.getState();
       gameUI?.destroy({ children: true });
-      gameUI = createGameUI(currentProfile, handleSpin, handleAutoSpinToggle, soundService);
+      gameUI = createGameUI(currentProfile, handleSpin, handleAutoSpinToggle, soundService, spinService);
       gameUI.zIndex = 3;
       gameRoot.addChild(gameUI);
       gameUI.applyState({
@@ -255,11 +259,12 @@ async function bootstrap(): Promise<void> {
         alienCharacter.applyLayout(alienLayout);
       }
     }
+
+    practicePanel.visible = isDesktop;
   }
 
-  // await launchView.waitUntilReady(); 
+  await launchView.waitUntilReady();
   setAppScreen('playing');
-  practicePanel.visible = true;
   layoutScene(false);
 
   window.addEventListener('resize', () => {
