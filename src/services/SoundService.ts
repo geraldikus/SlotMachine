@@ -1,4 +1,6 @@
-const COIN_DROP_URL = '/assets/sounds/CoinDrop.wav';
+import { assetUrl } from '../utils/assetUrl';
+
+const COIN_DROP_URL = assetUrl('assets/sounds/CoinDrop.wav');
 const STORAGE_KEY = 'slot-sound-settings';
 
 interface SoundSettings {

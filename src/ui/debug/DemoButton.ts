@@ -1,4 +1,5 @@
 import { Assets, Container, Graphics, Sprite, Text } from 'pixi.js';
+import { assetUrl } from '../../utils/assetUrl';
 
 const INACTIVE_COLOR = 0x3a3a5c;
 const ACTIVE_COLOR = 0x51cf66;
@@ -67,7 +68,7 @@ export class DemoButton extends Container {
 
     buttonText.anchor.set(0, 0.5);
 
-    const texture = await Assets.load('/assets/icon/refresh-ccw.svg');
+    const texture = await Assets.load(assetUrl('assets/icon/refresh-ccw.svg'));
     this.icon = new Sprite(texture);
     this.icon.width = iconSize;
     this.icon.height = iconSize;

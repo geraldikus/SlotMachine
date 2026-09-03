@@ -1,7 +1,8 @@
 import { Assets, Container, Graphics, Sprite, Spritesheet, Text, Texture } from 'pixi.js';
 import { SYMBOLS, symbolToFrameName } from '../../config/symbols';
+import { assetUrl } from '../../utils/assetUrl';
 
-const ATLAS_URL = '/assets/fruits.json';
+const ATLAS_URL = assetUrl('assets/fruits.json');
 const ROW_GAP = 8;
 const PANEL_PADDING = 10;
 const LABEL_WIDTH = 120;

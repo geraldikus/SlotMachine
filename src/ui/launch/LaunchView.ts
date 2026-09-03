@@ -1,5 +1,6 @@
 import { Container, Graphics } from 'pixi.js';
 import { DotLottie } from '@lottiefiles/dotlottie-web';
+import { assetUrl } from '../../utils/assetUrl';
 
 const LAUNCH_DURATION_MS = 3500;
 const LOTTIE_ASPECT = 16 / 9;
@@ -37,7 +38,7 @@ export class LaunchView extends Container {
 
     this.dotLottie = new DotLottie({
       canvas: this.lottieCanvas,
-      src: '/assets/launch/CasinoJackpot.json',
+      src: assetUrl('assets/launch/CasinoJackpot.json'),
       autoplay: true,
       loop: true,
       layout: { fit: 'contain', align: [0.5, 0.5] },

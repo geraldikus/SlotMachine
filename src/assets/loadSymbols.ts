@@ -1,8 +1,9 @@
 import { Assets, Spritesheet, Texture } from 'pixi.js';
 import { SYMBOLS, symbolToFrameName } from '../config/symbols';
 import { SymbolKey } from '../config/types';
+import { assetUrl } from '../utils/assetUrl';
 
-const ATLAS_URL = '/assets/fruits.json';
+const ATLAS_URL = assetUrl('assets/fruits.json');
 
 export type SymbolTextureMap = ReadonlyMap<SymbolKey, Texture>;
 

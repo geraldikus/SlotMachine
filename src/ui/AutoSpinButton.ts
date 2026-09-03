@@ -6,7 +6,9 @@ const RELEASE_DURATION_MS = 180;
 const ICON_ROTATION_SPEED = 0.08;
 const DIMMED_ALPHA = 0.45;
 const ICON_SIZE = 18;
-const ICON_PATH = '/assets/icon/refresh-ccw.svg';
+import { assetUrl } from '../utils/assetUrl';
+
+const ICON_PATH = assetUrl('assets/icon/refresh-ccw.svg');
 
 export class AutoSpinButton extends Container {
   private readonly background: Graphics;
