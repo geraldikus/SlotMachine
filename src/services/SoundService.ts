@@ -13,6 +13,8 @@ const DEFAULT_SETTINGS: SoundSettings = {
   muted: false,
 };
 
+const UNLOCK_TIMEOUT_MS = 300;
+
 export class SoundService {
   private audioContext: AudioContext | null = null;
   private buffer: AudioBuffer | null = null;
@@ -30,12 +32,21 @@ export class SoundService {
     this.buffer = await this.audioContext.decodeAudioData(arrayBuffer);
   }
 
-  async ensureUnlocked(): Promise<void> {
-    if (!this.audioContext) return;
+  /** Call synchronously from a user-gesture handler (tap/click). */
+  unlockFromGesture(): void {
+    if (!this.audioContext || this.audioContext.state !== 'suspended') return;
+    void this.audioContext.resume();
+  }
 
-    if (this.audioContext.state === 'suspended') {
-      await this.audioContext.resume();
-    }
+  async ensureUnlocked(): Promise<void> {
+    if (!this.audioContext || this.audioContext.state !== 'suspended') return;
+
+    await Promise.race([
+      this.audioContext.resume(),
+      new Promise<void>((resolve) => {
+        window.setTimeout(resolve, UNLOCK_TIMEOUT_MS);
+      }),
+    ]);
   }
 
   playWin(): void {

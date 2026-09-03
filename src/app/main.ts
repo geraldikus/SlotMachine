@@ -156,62 +156,70 @@ async function bootstrap(): Promise<void> {
   const handleSpin = (): void => {
     if (isSpinning || engine.currentState !== 'IDLE' || !gameUI) return;
 
+    soundService.unlockFromGesture();
+
     void (async () => {
       isSpinning = true;
-      try {
-        await soundService.ensureUnlocked();
-      } catch {
-        // Audio unlock may fail on some mobile browsers; spin should still work.
-      }
-      practicePanel.clearArmedVisuals();
-      if (gameUI && 'clearDemoPanelArmedVisuals' in gameUI) {
-        (gameUI as any).clearDemoPanelArmedVisuals();
-      }
-      engine.clearWinHighlight();
-      gameUI!.winBanner.hide();
-      gameUI!.hideError();
-
-      alienCharacter?.playHit();
-
-      currentBet = gameUI!.currentBet;
-      balance -= currentBet;
-      gameUI!.setBalance(balance, true);
       gameUI!.setBetSelectorEnabled(false);
 
-      const roundResult = await spinRoundController.playRound(currentBet);
+      try {
+        void soundService.ensureUnlocked();
 
-      isSpinning = false;
+        practicePanel.clearArmedVisuals();
+        if (gameUI && 'clearDemoPanelArmedVisuals' in gameUI) {
+          (gameUI as any).clearDemoPanelArmedVisuals();
+        }
+        engine.clearWinHighlight();
+        gameUI!.winBanner.hide();
+        gameUI!.hideError();
 
-      if (!roundResult.ok) {
-        balance += currentBet;
+        alienCharacter?.playHit();
+
+        currentBet = gameUI!.currentBet;
+        balance -= currentBet;
         gameUI!.setBalance(balance, true);
-        gameUI!.showError(roundResult.error.message);
+
+        const roundResult = await spinRoundController.playRound(currentBet);
+
+        isSpinning = false;
+
+        if (!roundResult.ok) {
+          balance += currentBet;
+          gameUI!.setBalance(balance, true);
+          gameUI!.showError(roundResult.error.message);
+          autoSpinActive = false;
+          gameUI!.setAutoSpinActive(false);
+          gameUI!.setBetSelectorEnabled(true);
+          return;
+        }
+
+        const { winAmount, winningCells } = roundResult.response;
+
+        if (winAmount > 0) {
+          engine.showWinHighlight(winningCells);
+          gameUI!.winBanner.show(winAmount);
+          soundService.playWin();
+          balance += winAmount;
+          gameUI!.setBalance(balance, true);
+          gameUI!.setTotalWin(winAmount, true);
+          await alienCharacter?.playDeath();
+        } else {
+          gameUI!.setTotalWin(0);
+        }
+
+        if (autoSpinActive && balance >= gameUI!.currentBet) {
+          handleSpin();
+        } else {
+          autoSpinActive = false;
+          gameUI!.setAutoSpinActive(false);
+          gameUI!.setBetSelectorEnabled(true);
+        }
+      } catch (error: unknown) {
+        console.error('Spin failed:', error);
+        isSpinning = false;
         autoSpinActive = false;
-        gameUI!.setAutoSpinActive(false);
-        gameUI!.setBetSelectorEnabled(true);
-        return;
-      }
-
-      const { winAmount, winningCells } = roundResult.response;
-
-      if (winAmount > 0) {
-        engine.showWinHighlight(winningCells);
-        gameUI!.winBanner.show(winAmount);
-        soundService.playWin();
-        balance += winAmount;
-        gameUI!.setBalance(balance, true);
-        gameUI!.setTotalWin(winAmount, true);
-        await alienCharacter?.playDeath();
-      } else {
-        gameUI!.setTotalWin(0);
-      }
-
-      if (autoSpinActive && balance >= gameUI!.currentBet) {
-        handleSpin();
-      } else {
-        autoSpinActive = false;
-        gameUI!.setAutoSpinActive(false);
-        gameUI!.setBetSelectorEnabled(true);
+        gameUI?.setAutoSpinActive(false);
+        gameUI?.setBetSelectorEnabled(true);
       }
     })();
   };
