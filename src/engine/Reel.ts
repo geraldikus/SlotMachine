@@ -1,4 +1,4 @@
-import { Container, Sprite, Texture } from 'pixi.js';
+import { Container } from 'pixi.js';
 import { SymbolTextureMap } from '../assets/loadSymbols';
 import { SymbolCell } from './SymbolCell';
 import {
@@ -43,17 +43,12 @@ export class Reel extends Container {
   constructor(
     symbolKeys: SymbolKey[],
     initialColumn: SymbolKey[],
-    maskTexture: Texture,
     textures: SymbolTextureMap,
   ) {
     super();
     this.symbolKeys = symbolKeys;
 
-    const maskSprite = new Sprite(maskTexture);
-    maskSprite.renderable = false;
-    this.addChild(maskSprite);
     this.addChild(this.reelLayer);
-    this.reelLayer.setMask({ mask: maskSprite, channel: 'alpha', inverse: false });
 
     for (let i = 0; i < SPRITE_COUNT; i += 1) {
       const key = initialColumn[i] ?? symbolKeys[i % symbolKeys.length];

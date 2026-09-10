@@ -18,6 +18,7 @@ export const SYMBOL_SIZE = 150;
 export const SPRITE_COUNT = 5;
 export const REEL_COUNT = 4;
 export const REEL_SPACING = 10;
+export const GRID_WIDTH = REEL_COUNT * REEL_WIDTH + (REEL_COUNT - 1) * REEL_SPACING;
 
 /** Y positions for the 5 sprites: top buffer, 3 visible rows, bottom buffer */
 export const SPRITE_Y_POSITIONS = [-300, -150, 0, 150, 300] as const;

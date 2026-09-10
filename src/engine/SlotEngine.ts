@@ -1,4 +1,4 @@
-import { Container, Graphics, Texture } from 'pixi.js';
+import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { SymbolTextureMap } from '../assets/loadSymbols';
 import { Reel } from './Reel';
 import { SymbolCell } from './SymbolCell';
@@ -6,6 +6,7 @@ import { WinLineOverlay } from './WinLineOverlay';
 import {
   CASCADE_DELAY_MS,
   CellPosition,
+  GRID_WIDTH,
   REEL_COUNT,
   REEL_HEIGHT,
   REEL_SPACING,
@@ -15,7 +16,6 @@ import {
   SymbolKey,
 } from '../config/types';
 
-const GRID_WIDTH = REEL_COUNT * REEL_WIDTH + (REEL_COUNT - 1) * REEL_SPACING;
 const DEFAULT_MIN_SPIN_MS = 2000;
 
 export class SlotEngine extends Container {
@@ -32,15 +32,31 @@ export class SlotEngine extends Container {
 
   constructor(
     symbolKeys: SymbolKey[],
-    maskTexture: Texture,
     textures: SymbolTextureMap,
     initialMatrix?: ResultMatrix,
   ) {
     super();
 
+    this.sortableChildren = true;
+
     const frame = new Graphics();
     frame.roundRect(-8, -8, GRID_WIDTH + 16, REEL_HEIGHT + 16, 12).fill(0x2a2a4a);
+    frame.zIndex = 0;
     this.addChild(frame);
+
+    const maskedReels = new Container();
+    maskedReels.zIndex = 1;
+    this.addChild(maskedReels);
+
+    const mask = new Sprite(Texture.WHITE);
+    mask.width = GRID_WIDTH;
+    mask.height = REEL_HEIGHT;
+    mask.renderable = false;
+    maskedReels.addChild(mask);
+
+    const reelsLayer = new Container();
+    maskedReels.addChild(reelsLayer);
+    reelsLayer.setMask({ mask, channel: 'alpha', inverse: false });
 
     const defaultMatrix: ResultMatrix = initialMatrix ?? [
       [symbolKeys[0], symbolKeys[1], symbolKeys[2], symbolKeys[3]],
@@ -57,13 +73,14 @@ export class SlotEngine extends Container {
         defaultMatrix[2][column],
       ];
 
-      const reel = new Reel(symbolKeys, initialColumn, maskTexture, textures);
+      const reel = new Reel(symbolKeys, initialColumn, textures);
       reel.x = column * (REEL_WIDTH + REEL_SPACING);
       reel.on('stopped', () => this.onReelStopped());
       this.reels.push(reel);
-      this.addChild(reel);
+      reelsLayer.addChild(reel);
     }
 
+    this.winLineOverlay.zIndex = 2;
     this.addChild(this.winLineOverlay);
   }
 
@@ -157,6 +174,7 @@ export class SlotEngine extends Container {
   update(deltaTime: number): void {
     this.reels.forEach((reel) => reel.update(deltaTime));
     this.updateWinPulse();
+    this.winLineOverlay.update(performance.now());
   }
 
   showWinHighlight(cells: CellPosition[]): void {

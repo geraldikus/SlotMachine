@@ -1,9 +1,9 @@
-import { Application, Container, Graphics, Rectangle, Texture } from 'pixi.js';
+import { Application, Container } from 'pixi.js';
 import { DEFAULT_BET, INITIAL_BALANCE } from '../config/currency';
 import { SYMBOLS } from '../config/symbols';
 import { loadSymbolTextures } from '../assets/loadSymbols';
 import { AlienCharacter, loadAlienAssets } from '../character';
-import { AppScreen, REEL_HEIGHT, REEL_WIDTH } from '../config/types';
+import { AppScreen } from '../config/types';
 import { SlotEngine } from '../engine/SlotEngine';
 import { LayoutManager } from '../layout/LayoutManager';
 import { SoundService } from '../services/SoundService';
@@ -20,24 +20,6 @@ import { SoundControls } from '../ui/SoundControls';
 const MIN_SPIN_MS = 2000;
 
 let appScreen: AppScreen = 'loading';
-
-function createReelMaskTexture(app: Application): Texture {
-  const container = new Container();
-  const maskShape = new Graphics();
-  maskShape.rect(0, 0, REEL_WIDTH, REEL_HEIGHT).fill(0xffffff);
-  container.addChild(maskShape);
-
-  app.stage.addChild(container);
-  const texture = app.renderer.generateTexture({
-    target: container,
-    frame: new Rectangle(0, 0, REEL_WIDTH, REEL_HEIGHT),
-    resolution: app.renderer.resolution,
-    clearColor: [0, 0, 0, 0],
-  });
-  app.stage.removeChild(container);
-
-  return texture;
-}
 
 function createGameUI(
   profile: LayoutManager['currentProfile'],
@@ -96,7 +78,6 @@ async function bootstrap(): Promise<void> {
 
   setAppScreen('loading'); // loading
 
-  const reelMaskTexture = createReelMaskTexture(app);
   const symbolTextures = await loadSymbolTextures();
   const spritesheet = await getSpritesheet();
   const atlasDebugPanel = new SpriteAtlasDebugPanel(spritesheet);
@@ -123,7 +104,7 @@ async function bootstrap(): Promise<void> {
   };
   layoutSoundControls();
 
-  const engine = new SlotEngine(SYMBOLS, reelMaskTexture, symbolTextures);
+  const engine = new SlotEngine(SYMBOLS, symbolTextures);
   engine.zIndex = 1;
   gameRoot.addChild(engine);
   const spinService = new SpinService();

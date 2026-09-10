@@ -3,6 +3,10 @@ import { CellPosition, REEL_SPACING, REEL_WIDTH, SYMBOL_SIZE, VISIBLE_ROW_Y } fr
 
 const LINE_COLOR = 0xffe66d;
 const GLOW_COLOR = 0x4ecdc4;
+const MAIN_LINE_WIDTH = 5;
+const GLOW_EXTRA_WIDTH = 10;
+const DOT_RADIUS = 7;
+const DOT_GLOW_PADDING = 4;
 
 function sortCellsForLine(cells: CellPosition[]): CellPosition[] {
   const sameRow = cells.every((cell) => cell.row === cells[0].row);
@@ -28,61 +32,67 @@ function getCellCenter(col: number, row: number): { x: number; y: number } {
 export class WinLineOverlay extends Container {
   private readonly glowLine = new Graphics();
   private readonly mainLine = new Graphics();
-  private readonly dots = new Graphics();
-  private activeCells: CellPosition[] = [];
+  private readonly dotGlow = new Graphics();
+  private readonly dotCore = new Graphics();
 
   constructor() {
     super();
     this.visible = false;
     this.addChild(this.glowLine);
     this.addChild(this.mainLine);
-    this.addChild(this.dots);
+    this.addChild(this.dotGlow);
+    this.addChild(this.dotCore);
   }
 
   show(cells: CellPosition[]): void {
-    this.activeCells = sortCellsForLine(cells);
+    const points = sortCellsForLine(cells).map(({ row, col }) => getCellCenter(col, row));
+    this.drawGeometry(points);
     this.visible = true;
-    this.redraw(performance.now());
+    this.update(performance.now());
   }
 
   hide(): void {
-    this.activeCells = [];
     this.visible = false;
     this.glowLine.clear();
     this.mainLine.clear();
-    this.dots.clear();
+    this.dotGlow.clear();
+    this.dotCore.clear();
+    this.glowLine.alpha = 1;
+    this.dotGlow.alpha = 1;
   }
 
-  update(): void {
-    if (!this.visible || this.activeCells.length === 0) return;
-    this.redraw(performance.now());
-  }
+  update(time: number): void {
+    if (!this.visible) return;
 
-  private redraw(time: number): void {
-    const points = this.activeCells.map(({ row, col }) => getCellCenter(col, row));
     const pulse = 0.65 + Math.sin(time / 220) * 0.35;
-    const mainWidth = 5 + Math.sin(time / 180) * 1.5;
-    const glowWidth = mainWidth + 10;
-    const dotRadius = 7 + Math.sin(time / 200) * 2;
+    this.glowLine.alpha = pulse * 0.35;
+    this.dotGlow.alpha = pulse * 0.25;
+  }
+
+  private drawGeometry(points: { x: number; y: number }[]): void {
+    this.glowLine.clear();
+    this.mainLine.clear();
+    this.dotGlow.clear();
+    this.dotCore.clear();
 
     this.drawPolyline(this.glowLine, points, {
       color: GLOW_COLOR,
-      width: glowWidth,
-      alpha: pulse * 0.35,
+      width: MAIN_LINE_WIDTH + GLOW_EXTRA_WIDTH,
+      alpha: 1,
     });
 
     this.drawPolyline(this.mainLine, points, {
       color: LINE_COLOR,
-      width: mainWidth,
-      alpha: pulse,
+      width: MAIN_LINE_WIDTH,
+      alpha: 1,
     });
 
-    this.dots.clear();
     for (const point of points) {
-      this.dots.circle(point.x, point.y, dotRadius + 4);
-      this.dots.fill({ color: GLOW_COLOR, alpha: pulse * 0.25 });
-      this.dots.circle(point.x, point.y, dotRadius);
-      this.dots.fill({ color: LINE_COLOR, alpha: pulse });
+      this.dotGlow.circle(point.x, point.y, DOT_RADIUS + DOT_GLOW_PADDING);
+      this.dotGlow.fill({ color: GLOW_COLOR, alpha: 1 });
+
+      this.dotCore.circle(point.x, point.y, DOT_RADIUS);
+      this.dotCore.fill({ color: LINE_COLOR, alpha: 1 });
     }
   }
 
@@ -91,8 +101,6 @@ export class WinLineOverlay extends Container {
     points: { x: number; y: number }[],
     style: { color: number; width: number; alpha: number },
   ): void {
-    graphics.clear();
-
     if (points.length < 2) {
       if (points.length === 1) {
         graphics.circle(points[0].x, points[0].y, style.width);
