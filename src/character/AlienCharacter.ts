@@ -10,6 +10,7 @@ const EYE_MAX_TURN = 25;
 export class AlienCharacter extends Container {
   private readonly spine: Spine;
   private pointerRoot: Container | null = null;
+  private eyeTrackingEnabled = true;
   private readonly pointerPoint = {
     x: window.innerWidth / 2,
     y: window.innerHeight / 2,
@@ -55,6 +56,7 @@ export class AlienCharacter extends Container {
   }
 
   playHit(): void {
+    this.setEyeTrackingEnabled(true);
     this.spine.state.setAnimation(0, 'jump', false);
 
     this.spine.state.addListener({
@@ -67,8 +69,17 @@ export class AlienCharacter extends Container {
     });
   }
 
+  setEyeTrackingEnabled(enabled: boolean): void {
+    this.eyeTrackingEnabled = enabled;
+    if (!enabled) {
+      this.resetEyeBones();
+    }
+  }
+
   playDeath(): Promise<void> {
     return new Promise((resolve) => {
+      this.setEyeTrackingEnabled(false);
+
       const entry = this.spine.state.setAnimation(0, 'death', false);
       if (!entry?.animation) {
         resolve();
@@ -94,9 +105,23 @@ export class AlienCharacter extends Container {
 
   private setupLookAt(): void {
     this.spine.beforeUpdateWorldTransforms = () => {
+      if (!this.eyeTrackingEnabled) return;
       this.updateEyeRotation();
       this.updatePupilOffset();
     };
+  }
+
+  private resetEyeBones(): void {
+    const eye = this.spine.skeleton.findBone(EYE_BONE_NAME);
+    if (eye) {
+      eye.pose.rotation = eye.data.setupPose.rotation;
+    }
+
+    const pupil = this.spine.skeleton.findBone(PUPIL_BONE_NAME);
+    if (pupil) {
+      pupil.pose.x = pupil.data.setupPose.x;
+      pupil.pose.y = pupil.data.setupPose.y;
+    }
   }
 
   /** Rotate the eye bone toward the cursor (parent-local space). */

@@ -253,7 +253,14 @@ async function bootstrap(): Promise<void> {
 
     const isDesktop = currentProfile.id === 'desktop';
 
+    if (!isDesktop && alienCharacter) {
+      console.log('[AlienCharacter] destroy');
+      alienCharacter.destroy({ children: true });
+      alienCharacter = null;
+    }
+
     if (isDesktop && !alienCharacter) {
+      console.log('[AlienCharacter] create');
       alienCharacter = new AlienCharacter();
       alienCharacter.zIndex = 2;
       alienCharacter.attachPointerTracking(app.stage);
@@ -261,9 +268,8 @@ async function bootstrap(): Promise<void> {
     }
 
     if (alienCharacter) {
-      alienCharacter.visible = isDesktop;
       const alienLayout = currentProfile.getAlienLayout?.();
-      if (isDesktop && alienLayout) {
+      if (alienLayout) {
         alienCharacter.applyLayout(alienLayout);
       }
     }
