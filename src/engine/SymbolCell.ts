@@ -31,6 +31,7 @@ function computeSymbolScale(key: SymbolKey, texture: Texture): number {
 }
 
 export class SymbolCell extends Container {
+  readonly pulseWrap = new Container();
   private readonly sprite: Sprite;
   private readonly textures: SymbolTextureMap;
   private currentKey: SymbolKey;
@@ -48,8 +49,9 @@ export class SymbolCell extends Container {
 
     this.sprite = new Sprite(texture);
     this.sprite.anchor.set(0.5);
-    this.sprite.position.set(SYMBOL_SIZE / 2, SYMBOL_SIZE / 2);
-    this.addChild(this.sprite);
+    this.pulseWrap.position.set(SYMBOL_SIZE / 2, SYMBOL_SIZE / 2);
+    this.pulseWrap.addChild(this.sprite);
+    this.addChild(this.pulseWrap);
     this.applyFitScale();
   }
 
@@ -68,12 +70,8 @@ export class SymbolCell extends Container {
     this.applyFitScale();
   }
 
-  setPulseScale(scale: number): void {
-    this.sprite.scale.set(this.baseScale * scale);
-  }
-
   resetPulse(): void {
-    this.sprite.scale.set(this.baseScale);
+    this.pulseWrap.scale.set(1);
   }
 
   setDimmed(dimmed: boolean): void {

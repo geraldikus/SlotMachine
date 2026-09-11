@@ -26,9 +26,6 @@ export class SlotEngine extends Container {
   private highlightedCells: SymbolCell[] = [];
   private dimmedCells: SymbolCell[] = [];
   private readonly winLineOverlay = new WinLineOverlay();
-  private pulseValue = 1.0;
-  private lastPulseUpdate = 0;
-  private readonly PULSE_UPDATE_INTERVAL = 16
 
   constructor(
     symbolKeys: SymbolKey[],
@@ -73,7 +70,7 @@ export class SlotEngine extends Container {
         defaultMatrix[2][column],
       ];
 
-      const reel = new Reel(symbolKeys, initialColumn, textures);
+      const reel = new Reel(symbolKeys, initialColumn, textures, column);
       reel.x = column * (REEL_WIDTH + REEL_SPACING);
       reel.on('stopped', () => this.onReelStopped());
       this.reels.push(reel);
@@ -90,6 +87,18 @@ export class SlotEngine extends Container {
 
   get activeMatrix(): ResultMatrix | null {
     return this.pendingMatrix;
+  }
+
+  getHighlightedCells(): SymbolCell[] {
+    return this.highlightedCells;
+  }
+
+  getDimmedCells(): SymbolCell[] {
+    return this.dimmedCells;
+  }
+
+  getWinLineOverlay(): WinLineOverlay {
+    return this.winLineOverlay;
   }
 
   getVisibleMatrix(): ResultMatrix {
@@ -173,8 +182,6 @@ export class SlotEngine extends Container {
 
   update(deltaTime: number): void {
     this.reels.forEach((reel) => reel.update(deltaTime));
-    this.updateWinPulse();
-    this.winLineOverlay.update(performance.now());
   }
 
   showWinHighlight(cells: CellPosition[]): void {
@@ -211,21 +218,6 @@ export class SlotEngine extends Container {
     this.highlightedCells = [];
     this.dimmedCells = [];
     this.winLineOverlay.hide();
-  }
-
-  private updateWinPulse(): void {
-    if (this.highlightedCells.length === 0) return;
-
-    const now = performance.now();
-
-    if (now - this.lastPulseUpdate >= this.PULSE_UPDATE_INTERVAL) {
-      this.pulseValue = 1 + Math.sin(now / 200) * 0.12;
-      this.lastPulseUpdate = now;
-    }
-
-    for (const cell of this.highlightedCells) {
-      cell.setPulseScale(this.pulseValue);
-    }
   }
 
   private onReelStopped(): void {

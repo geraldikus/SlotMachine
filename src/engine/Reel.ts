@@ -1,4 +1,7 @@
 import { Container } from 'pixi.js';
+import gsap from 'gsap';
+import { PixiPlugin } from 'gsap/PixiPlugin';
+import * as PIXI from 'pixi.js';
 import { SymbolTextureMap } from '../assets/loadSymbols';
 import { SymbolCell } from './SymbolCell';
 import {
@@ -9,6 +12,9 @@ import {
   SymbolKey,
   VISIBLE_ROW_Y,
 } from '../config/types';
+
+gsap.registerPlugin(PixiPlugin);
+PixiPlugin.registerPIXI(PIXI);
 
 type ReelPhase = 'idle' | 'spinning' | 'decelerating' | 'snapping';
 
@@ -36,14 +42,15 @@ export class Reel extends Container {
   private targetSymbols: SymbolKey[] | null = null;
   private pendingSymbols: SymbolKey[] = [];
   private stopDistanceRemaining = 0;
-  private snapStartTime = 0;
-  private snapStartOffset = 0;
   private randomKeyIndex = 0;
+  private snapTween?: gsap.core.Tween;
+  private juiceTween?: gsap.core.Timeline;
 
   constructor(
     symbolKeys: SymbolKey[],
     initialColumn: SymbolKey[],
     textures: SymbolTextureMap,
+    private readonly reelIndex = 0,
   ) {
     super();
     this.symbolKeys = symbolKeys;
@@ -84,14 +91,20 @@ export class Reel extends Container {
   }
 
   startSpin(): void {
+    // Kill любые активные GSAP анимации
+    this.snapTween?.kill();
+    this.juiceTween?.kill();
+
+    // Reset reelLayer transform
+    this.reelLayer.y = 0;
+    this.reelLayer.scale.set(1, 1);
+
     this.phase = 'spinning';
     this.isSpinning = true;
     this.currentSpeed = SPIN_SPEED;
     this.targetSymbols = null;
     this.pendingSymbols = [];
     this.stopDistanceRemaining = 0;
-    this.snapStartTime = 0;
-    this.snapStartOffset = 0;
   }
 
   stopSpin(targetSymbols: SymbolKey[]): void {
@@ -116,8 +129,7 @@ export class Reel extends Container {
 
   update(deltaTime: number): void {
     if (this.phase === 'snapping') {
-      this.updateSnap(deltaTime);
-      return;
+      return; // GSAP управляет snap, ничего не делаем
     }
 
     if (!this.isSpinning) return;
@@ -251,32 +263,57 @@ export class Reel extends Container {
     this.phase = 'snapping';
     this.isSpinning = false;
     this.currentSpeed = 0;
-    this.snapStartTime = performance.now();
 
     const offsets = this.cells.map((cell) => cell.y - this.nearestGridY(cell.y));
-    this.snapStartOffset = offsets.reduce((sum, value) => sum + value, 0) / offsets.length;
+    const startOffset = offsets.reduce((sum, value) => sum + value, 0) / offsets.length;
+
+    // Kill any existing tweens
+    this.snapTween?.kill();
+    this.juiceTween?.kill();
+
+    // Snap animation: выравнивание символов по сетке
+    const snap = { offset: startOffset };
+    this.snapTween = gsap.to(snap, {
+      offset: 0,
+      duration: 1.1,
+      ease: 'elastic.out(1, 0.4)',
+      onUpdate: () => this.applySnapOffset(snap.offset),
+      onComplete: () => this.finalizeStop(),
+    });
+
+    // Juice animation: bounce + squash на reelLayer
+    const isLastReel = this.reelIndex === 3; // REEL_COUNT - 1
+    const bounceY = isLastReel ? 12 : 8;
+    const squashScale = isLastReel ? 0.96 : 0.98;
+
+    this.juiceTween = gsap.timeline();
+
+    // Overshoot вниз (как будто барабан "ударился")
+    this.juiceTween.to(this.reelLayer, {
+      pixi: { y: bounceY, scaleY: squashScale },
+      duration: 0.08,
+      ease: 'power2.out',
+    });
+
+    // Bounce обратно с elastic
+    this.juiceTween.to(this.reelLayer, {
+      pixi: { y: 0, scaleY: 1 },
+      duration: 0.35,
+      ease: 'elastic.out(1, 0.5)',
+    });
+  }
+
+  private applySnapOffset(offset: number): void {
+    for (const cell of this.cells) {
+      const gridY = this.nearestGridY(cell.y - offset);
+      cell.y = gridY + offset;
+    }
   }
 
   private nearestGridY(y: number): number {
     const normalized = y + 300;
     const slot = Math.round(normalized / SYMBOL_SIZE);
     return slot * SYMBOL_SIZE - 300;
-  }
-
-  private updateSnap(_deltaTime: number): void {
-    const elapsed = performance.now() - this.snapStartTime;
-    const progress = Math.min(1, elapsed / SNAP_DURATION_MS);
-    const eased = this.easeOutBounce(progress);
-    const offset = this.snapStartOffset * (1 - eased);
-
-    for (const cell of this.cells) {
-      const gridY = this.nearestGridY(cell.y - offset);
-      cell.y = gridY + offset;
-    }
-
-    if (progress >= 1) {
-      this.finalizeStop();
-    }
   }
 
   private finalizeStop(): void {
@@ -290,21 +327,5 @@ export class Reel extends Container {
     this.pendingSymbols = [];
     this.stopDistanceRemaining = 0;
     this.emit('stopped');
-  }
-
-  private easeOutBounce(t: number): number {
-    if (t < 1 / 2.75) {
-      return 7.5625 * t * t;
-    }
-    if (t < 2 / 2.75) {
-      const adjusted = t - 1.5 / 2.75;
-      return 7.5625 * adjusted * adjusted + 0.75;
-    }
-    if (t < 2.5 / 2.75) {
-      const adjusted = t - 2.25 / 2.75;
-      return 7.5625 * adjusted * adjusted + 0.9375;
-    }
-    const adjusted = t - 2.625 / 2.75;
-    return 7.5625 * adjusted * adjusted + 0.984375;
   }
 }

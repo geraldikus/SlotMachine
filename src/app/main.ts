@@ -1,10 +1,11 @@
 import { Application, Container } from 'pixi.js';
-import { DEFAULT_BET, INITIAL_BALANCE } from '../config/currency';
+import { DEFAULT_BET, INITIAL_BALANCE, INITIAL_TOTAL_WIN } from '../config/currency';
 import { SYMBOLS } from '../config/symbols';
 import { loadSymbolTextures } from '../assets/loadSymbols';
 import { AlienCharacter, loadAlienAssets } from '../character';
 import { AppScreen } from '../config/types';
 import { SlotEngine } from '../engine/SlotEngine';
+import { WinPresentation } from '../engine/WinPresentation';
 import { LayoutManager } from '../layout/LayoutManager';
 import { SoundService } from '../services/SoundService';
 import { SpinService } from '../services/SpinService';
@@ -107,6 +108,7 @@ async function bootstrap(): Promise<void> {
   const engine = new SlotEngine(SYMBOLS, symbolTextures);
   engine.zIndex = 1;
   gameRoot.addChild(engine);
+  const winPresentation = new WinPresentation();
   const spinService = new SpinService();
   const spinRoundController = new SpinRoundController(engine, spinService, MIN_SPIN_MS);
 
@@ -116,6 +118,7 @@ async function bootstrap(): Promise<void> {
   app.stage.addChild(practicePanel);
 
   let balance = INITIAL_BALANCE;
+  let totalWin = INITIAL_TOTAL_WIN;
   let currentBet: number = DEFAULT_BET;
   let gameUI: (IGameUI & Container) | null = null;
   let alienCharacter: AlienCharacter | null = null;
@@ -150,6 +153,7 @@ async function bootstrap(): Promise<void> {
         if (gameUI && 'clearDemoPanelArmedVisuals' in gameUI) {
           (gameUI as any).clearDemoPanelArmedVisuals();
         }
+        winPresentation.kill();
         engine.clearWinHighlight();
         gameUI!.winBanner.hide();
         gameUI!.hideError();
@@ -178,14 +182,26 @@ async function bootstrap(): Promise<void> {
 
         if (winAmount > 0) {
           engine.showWinHighlight(winningCells);
-          gameUI!.winBanner.show(winAmount);
+          gameUI!.winBanner.prepareShow(winAmount);
+
+          winPresentation.play({
+            highlighted: engine.getHighlightedCells(),
+            dimmed: engine.getDimmedCells(),
+            overlay: engine.getWinLineOverlay(),
+            banner: gameUI!.winBanner,
+            amount: winAmount,
+            gameRoot,
+            soundService,
+            alienCharacter: alienCharacter ?? undefined,
+          });
+
           soundService.playWin();
           balance += winAmount;
+          totalWin += winAmount;
           gameUI!.setBalance(balance, true);
-          gameUI!.setTotalWin(winAmount, true);
-          await alienCharacter?.playDeath();
-        } else {
-          gameUI!.setTotalWin(0);
+          gameUI!.setTotalWin(totalWin, true);
+
+          await winPresentation.waitForIntro();
         }
 
         if (autoSpinActive && balance >= gameUI!.currentBet) {
@@ -225,10 +241,11 @@ async function bootstrap(): Promise<void> {
       gameRoot.addChild(gameUI);
       gameUI.applyState({
         balance: previousState?.balance ?? balance,
-        totalWin: previousState?.totalWin ?? 0,
+        totalWin: previousState?.totalWin ?? totalWin,
         bet: previousState?.bet ?? currentBet,
       });
       balance = previousState?.balance ?? balance;
+      totalWin = previousState?.totalWin ?? totalWin;
       currentBet = previousState?.bet ?? currentBet;
     }
 

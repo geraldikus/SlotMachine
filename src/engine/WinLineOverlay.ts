@@ -30,50 +30,51 @@ function getCellCenter(col: number, row: number): { x: number; y: number } {
 }
 
 export class WinLineOverlay extends Container {
-  private readonly glowLine = new Graphics();
-  private readonly mainLine = new Graphics();
-  private readonly dotGlow = new Graphics();
-  private readonly dotCore = new Graphics();
+  readonly glowLine = new Graphics();
+  readonly mainLine = new Graphics();
+  private readonly dotContainers: Container[] = [];
 
   constructor() {
     super();
     this.visible = false;
     this.addChild(this.glowLine);
     this.addChild(this.mainLine);
-    this.addChild(this.dotGlow);
-    this.addChild(this.dotCore);
+  }
+
+  get dots(): Container[] {
+    return this.dotContainers;
   }
 
   show(cells: CellPosition[]): void {
     const points = sortCellsForLine(cells).map(({ row, col }) => getCellCenter(col, row));
     this.drawGeometry(points);
     this.visible = true;
-    this.update(performance.now());
   }
 
   hide(): void {
     this.visible = false;
     this.glowLine.clear();
     this.mainLine.clear();
-    this.dotGlow.clear();
-    this.dotCore.clear();
+    
+    for (const dot of this.dotContainers) {
+      this.removeChild(dot);
+      dot.destroy({ children: true });
+    }
+    this.dotContainers.length = 0;
+    
     this.glowLine.alpha = 1;
-    this.dotGlow.alpha = 1;
-  }
-
-  update(time: number): void {
-    if (!this.visible) return;
-
-    const pulse = 0.65 + Math.sin(time / 220) * 0.35;
-    this.glowLine.alpha = pulse * 0.35;
-    this.dotGlow.alpha = pulse * 0.25;
   }
 
   private drawGeometry(points: { x: number; y: number }[]): void {
     this.glowLine.clear();
     this.mainLine.clear();
-    this.dotGlow.clear();
-    this.dotCore.clear();
+    
+    // Clear old dots
+    for (const dot of this.dotContainers) {
+      this.removeChild(dot);
+      dot.destroy({ children: true });
+    }
+    this.dotContainers.length = 0;
 
     this.drawPolyline(this.glowLine, points, {
       color: GLOW_COLOR,
@@ -88,11 +89,22 @@ export class WinLineOverlay extends Container {
     });
 
     for (const point of points) {
-      this.dotGlow.circle(point.x, point.y, DOT_RADIUS + DOT_GLOW_PADDING);
-      this.dotGlow.fill({ color: GLOW_COLOR, alpha: 1 });
-
-      this.dotCore.circle(point.x, point.y, DOT_RADIUS);
-      this.dotCore.fill({ color: LINE_COLOR, alpha: 1 });
+      const dotContainer = new Container();
+      dotContainer.position.set(point.x, point.y);
+      
+      const dotGlow = new Graphics();
+      dotGlow.circle(0, 0, DOT_RADIUS + DOT_GLOW_PADDING);
+      dotGlow.fill({ color: GLOW_COLOR, alpha: 1 });
+      
+      const dotCore = new Graphics();
+      dotCore.circle(0, 0, DOT_RADIUS);
+      dotCore.fill({ color: LINE_COLOR, alpha: 1 });
+      
+      dotContainer.addChild(dotGlow);
+      dotContainer.addChild(dotCore);
+      
+      this.dotContainers.push(dotContainer);
+      this.addChild(dotContainer);
     }
   }
 
