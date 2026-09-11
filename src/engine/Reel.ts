@@ -107,6 +107,39 @@ export class Reel extends Container {
     this.stopDistanceRemaining = 0;
   }
 
+  forceIdle(columnSymbols?: SymbolKey[]): void {
+    this.snapTween?.kill();
+    this.juiceTween?.kill();
+    this.snapTween = undefined;
+    this.juiceTween = undefined;
+
+    this.reelLayer.y = 0;
+    this.reelLayer.scale.set(1, 1);
+
+    if (columnSymbols) {
+      for (let row = 0; row < 3; row += 1) {
+        this.getVisibleCell(row as 0 | 1 | 2).setSymbol(columnSymbols[row]);
+      }
+    }
+
+    for (const cell of this.cells) {
+      cell.y = this.nearestGridY(cell.y);
+    }
+
+    const wasActive = this.phase !== 'idle';
+
+    this.phase = 'idle';
+    this.isSpinning = false;
+    this.currentSpeed = 0;
+    this.targetSymbols = null;
+    this.pendingSymbols = [];
+    this.stopDistanceRemaining = 0;
+
+    if (wasActive) {
+      this.emit('stopped');
+    }
+  }
+
   stopSpin(targetSymbols: SymbolKey[]): void {
     if (this.phase === 'idle') return;
 

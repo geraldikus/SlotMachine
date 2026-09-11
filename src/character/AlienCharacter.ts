@@ -11,9 +11,29 @@ export class AlienCharacter extends Container {
   private readonly spine: Spine;
   private pointerRoot: Container | null = null;
   private eyeTrackingEnabled = true;
+  private deathResolve: (() => void) | null = null;
   private readonly pointerPoint = {
     x: window.innerWidth / 2,
     y: window.innerHeight / 2,
+  };
+
+  private readonly animationListener = {
+    complete: (entry: { animation?: { name: string } | null }) => {
+      const name = entry.animation?.name;
+      if (!name) return;
+
+      if (name === 'jump') {
+        this.spine.skeleton.setupPose();
+        this.spine.state.clearTracks();
+        return;
+      }
+
+      if (name === 'death' && this.deathResolve) {
+        const resolve = this.deathResolve;
+        this.deathResolve = null;
+        resolve();
+      }
+    },
   };
 
   constructor() {
@@ -26,6 +46,7 @@ export class AlienCharacter extends Container {
 
     this.addChild(this.spine);
     this.setupLookAt();
+    this.spine.state.addListener(this.animationListener);
   }
 
   /** Subscribe to pointer moves on the stage (or any parent) for eye tracking. */
@@ -47,6 +68,9 @@ export class AlienCharacter extends Container {
       this.pointerRoot = null;
     }
 
+    this.spine.state.removeListener(this.animationListener);
+    this.deathResolve = null;
+
     this.spine.destroy(options);
     super.destroy(options);
   }
@@ -58,15 +82,6 @@ export class AlienCharacter extends Container {
   playHit(): void {
     this.setEyeTrackingEnabled(true);
     this.spine.state.setAnimation(0, 'jump', false);
-
-    this.spine.state.addListener({
-      complete: (entry) => {
-        if (entry.animation?.name === 'jump') {
-          this.spine.skeleton.setupPose();
-          this.spine.state.clearTracks();
-        }
-      },
-    });
   }
 
   setEyeTrackingEnabled(enabled: boolean): void {
@@ -86,15 +101,7 @@ export class AlienCharacter extends Container {
         return;
       }
 
-      const listener = {
-        complete: (completedEntry: { animation?: { name: string } | null }) => {
-          if (completedEntry.animation?.name !== 'death') return;
-          this.spine.state.removeListener(listener);
-          resolve();
-        },
-      };
-
-      this.spine.state.addListener(listener);
+      this.deathResolve = resolve;
     });
   }
 

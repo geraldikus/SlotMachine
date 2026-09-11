@@ -184,6 +184,21 @@ export class SlotEngine extends Container {
     this.reels.forEach((reel) => reel.update(deltaTime));
   }
 
+  forceIdle(matrix?: ResultMatrix): void {
+    this.state = 'IDLE';
+    this.stoppedReelCount = REEL_COUNT;
+
+    this.reels.forEach((reel, index) => {
+      const columnSymbols = matrix
+        ? ([matrix[0][index], matrix[1][index], matrix[2][index]] as SymbolKey[])
+        : undefined;
+      reel.forceIdle(columnSymbols);
+    });
+
+    this.pendingMatrix = matrix ?? this.pendingMatrix;
+    this.emit('allStopped');
+  }
+
   showWinHighlight(cells: CellPosition[]): void {
     this.clearWinHighlight();
 

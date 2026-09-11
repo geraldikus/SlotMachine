@@ -25,19 +25,22 @@ interface WinContext {
 export class WinPresentation {
   private introTl?: gsap.core.Timeline;
   private idleTl?: gsap.core.Timeline;
-  private introResolve?: () => void;
+  private introDone: Promise<void> | null = null;
+  private resolveIntroDone: (() => void) | null = null;
 
   play(ctx: WinContext): void {
     this.kill();
+
+    this.introDone = new Promise<void>((resolve) => {
+      this.resolveIntroDone = resolve;
+    });
 
     const tl = gsap.timeline({
       defaults: { ease: 'power2.out' },
       onComplete: () => {
         this.startIdleLoop(ctx);
-        if (this.introResolve) {
-          this.introResolve();
-          this.introResolve = undefined;
-        }
+        this.resolveIntroDone?.();
+        this.resolveIntroDone = null;
       },
     });
 
@@ -179,19 +182,12 @@ export class WinPresentation {
     this.idleTl?.kill();
     this.introTl = undefined;
     this.idleTl = undefined;
-    if (this.introResolve) {
-      this.introResolve();
-      this.introResolve = undefined;
-    }
+    this.resolveIntroDone?.();
+    this.resolveIntroDone = null;
+    this.introDone = null;
   }
 
   waitForIntro(): Promise<void> {
-    if (!this.introTl || !this.introTl.isActive()) {
-      return Promise.resolve();
-    }
-    
-    return new Promise((resolve) => {
-      this.introResolve = resolve;
-    });
+    return this.introDone ?? Promise.resolve();
   }
 }

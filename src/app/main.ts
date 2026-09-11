@@ -17,8 +17,10 @@ import { MobileGameUI } from '../ui/mobile/MobileGameUI';
 import { PracticePanel } from '../ui/debug/PracticePanel';
 import { LaunchView } from '../ui/launch/LaunchView';
 import { SoundControls } from '../ui/SoundControls';
+import { AppLifecycleController } from './AppLifecycleController';
 
 const MIN_SPIN_MS = 2000;
+const AUTO_SPIN_WIN_PAUSE_MS = 800;
 
 let appScreen: AppScreen = 'loading';
 
@@ -125,10 +127,21 @@ async function bootstrap(): Promise<void> {
   let isSpinning = false;
   let autoSpinActive = false;
 
+  const cancelAutoSpin = (): void => {
+    autoSpinActive = false;
+    gameUI?.setAutoSpinActive(false);
+  };
+
+  const resetUiAfterInterrupt = (): void => {
+    isSpinning = false;
+    gameUI?.setBetSelectorEnabled(true);
+    engine.clearWinHighlight();
+    gameUI?.winBanner.hide();
+  };
+
   const handleAutoSpinToggle = (): void => {
     if (autoSpinActive) {
-      autoSpinActive = false;
-      gameUI?.setAutoSpinActive(false);
+      cancelAutoSpin();
       return;
     }
 
@@ -202,6 +215,10 @@ async function bootstrap(): Promise<void> {
           gameUI!.setTotalWin(totalWin, true);
 
           await winPresentation.waitForIntro();
+
+          if (autoSpinActive) {
+            await new Promise<void>((resolve) => window.setTimeout(resolve, AUTO_SPIN_WIN_PAUSE_MS));
+          }
         }
 
         if (autoSpinActive && balance >= gameUI!.currentBet) {
@@ -278,6 +295,20 @@ async function bootstrap(): Promise<void> {
   await launchView.waitUntilReady();
   setAppScreen('playing');
   layoutScene(false);
+
+  const lifecycleController = new AppLifecycleController({
+    app,
+    layoutScene: () => layoutScene(false),
+    cancelAutoSpin,
+    isSpinning: () => isSpinning,
+    isEngineIdle: () => engine.currentState === 'IDLE',
+    interruptSpin: () => spinRoundController.interrupt(),
+    resetUiAfterInterrupt,
+    killWinPresentation: () => winPresentation.kill(),
+    unlockSound: () => soundService.unlockFromGesture(),
+    getAppScreen: () => appScreen,
+  });
+  lifecycleController.attach();
 
   window.addEventListener('resize', () => {
     const profileChanged = layoutManager.refreshProfile();
