@@ -20,6 +20,8 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
   private readonly spinButton: SpinButton;
   private readonly autoSpinButton: AutoSpinButton;
   private readonly demoPopover: DemoPanelPopover;
+  private autoSpinActive = false;
+  private betControlsEnabled = true;
 
   constructor(
     profile: LayoutProfile,
@@ -107,12 +109,15 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
   }
 
   setBetSelectorEnabled(enabled: boolean): void {
+    this.betControlsEnabled = enabled;
     this.betSelector.setEnabled(enabled);
-    this.spinButton.setEnabled(enabled);
+    this.spinButton.setEnabled(enabled && !this.autoSpinActive);
   }
 
-  setAutoSpinActive(_active: boolean): void {
-    this.autoSpinButton.setActive(_active);
+  setAutoSpinActive(active: boolean): void {
+    this.autoSpinActive = active;
+    this.autoSpinButton.setActive(active);
+    this.spinButton.setEnabled(this.betControlsEnabled && !active);
   }
 
   showError(message: string): void {

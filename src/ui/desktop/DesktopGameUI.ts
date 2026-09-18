@@ -19,6 +19,7 @@ export class DesktopGameUI extends Container implements IGameUI {
   private readonly spinButton: SpinButton;
   private readonly autoSpinButton: AutoSpinButton;
   private autoSpinActive = false;
+  private betControlsEnabled = true;
 
   constructor(profile: LayoutProfile, onSpin: () => void, onAutoSpin: () => void) {
     super();
@@ -134,8 +135,9 @@ export class DesktopGameUI extends Container implements IGameUI {
   }
 
   setBetSelectorEnabled(enabled: boolean): void {
+    this.betControlsEnabled = enabled;
     this.betSelector.setEnabled(enabled);
-    this.spinButton.setEnabled(enabled);
+    this.spinButton.setEnabled(enabled && !this.autoSpinActive);
 
     if (this.autoSpinActive) {
       // STOP mode: keep button fully bright while auto is running.
@@ -154,6 +156,7 @@ export class DesktopGameUI extends Container implements IGameUI {
   setAutoSpinActive(active: boolean): void {
     this.autoSpinActive = active;
     this.autoSpinButton.setActive(active);
+    this.spinButton.setEnabled(this.betControlsEnabled && !active);
   }
 
   showError(message: string): void {

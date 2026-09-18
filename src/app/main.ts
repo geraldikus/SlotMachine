@@ -9,7 +9,6 @@ import { WinPresentation } from '../engine/WinPresentation';
 import { LayoutManager } from '../layout/LayoutManager';
 import { SoundService } from '../services/SoundService';
 import { SpinService } from '../services/SpinService';
-import { SpinRoundController } from '../services/SpinRoundController';
 import { DesktopGameUI } from '../ui/desktop/DesktopGameUI';
 import { getSpritesheet, SpriteAtlasDebugPanel } from '../ui/debug/SpriteAtlasDebugPanel';
 import { IGameUI } from '../ui/IGameUI';
@@ -18,6 +17,7 @@ import { PracticePanel } from '../ui/debug/PracticePanel';
 import { LaunchView } from '../ui/launch/LaunchView';
 import { SoundControls } from '../ui/SoundControls';
 import { AppLifecycleController } from './AppLifecycleController';
+import { GameRoundMachine } from '../state/GameRoundMachine';
 
 const MIN_SPIN_MS = 2000;
 const AUTO_SPIN_WIN_PAUSE_MS = 800;
@@ -112,7 +112,7 @@ async function bootstrap(): Promise<void> {
   gameRoot.addChild(engine);
   const winPresentation = new WinPresentation();
   const spinService = new SpinService();
-  const spinRoundController = new SpinRoundController(engine, spinService, MIN_SPIN_MS);
+  const roundMachine = new GameRoundMachine(engine, spinService, MIN_SPIN_MS);
 
   const practicePanel = new PracticePanel(spinService);
   practicePanel.position.set(12, 12);
@@ -124,78 +124,76 @@ async function bootstrap(): Promise<void> {
   let currentBet: number = DEFAULT_BET;
   let gameUI: (IGameUI & Container) | null = null;
   let alienCharacter: AlienCharacter | null = null;
-  let isSpinning = false;
-  let autoSpinActive = false;
+
+  // Инициализируем баланс в FSM
+  roundMachine.setBalance(balance);
+  roundMachine.setTotalWin(totalWin);
 
   const cancelAutoSpin = (): void => {
-    autoSpinActive = false;
+    roundMachine.dispatch({ type: 'CANCEL_AUTO_SPIN' });
     gameUI?.setAutoSpinActive(false);
   };
 
-  const resetUiAfterInterrupt = (): void => {
-    isSpinning = false;
-    gameUI?.setBetSelectorEnabled(true);
-    engine.clearWinHighlight();
-    gameUI?.winBanner.hide();
-  };
-
   const handleAutoSpinToggle = (): void => {
-    if (autoSpinActive) {
+    if (roundMachine.context.autoSpinActive) {
       cancelAutoSpin();
       return;
     }
 
-    autoSpinActive = true;
+    roundMachine.dispatch({ type: 'ENABLE_AUTO_SPIN' });
     gameUI?.setAutoSpinActive(true);
     handleSpin();
   };
 
   const handleSpin = (): void => {
-    if (isSpinning || engine.currentState !== 'IDLE' || !gameUI) return;
-
+    if (!roundMachine.matches('idle') || !gameUI) return;
     soundService.unlockFromGesture();
+    
+    const bet = gameUI.currentBet;
+    currentBet = bet;
+    
+    // Dispatch события для начала раунда
+    roundMachine.dispatch({ type: 'USER_SPIN', bet });
+  };
 
-    void (async () => {
-      isSpinning = true;
-      gameUI!.setBetSelectorEnabled(false);
-
-      try {
+  // Подписываемся на события FSM для обработки side-effects
+  roundMachine.on('state:changed', ({ from, to, context }) => {
+    switch (to) {
+      case 'debiting':
         void soundService.ensureUnlocked();
-
         practicePanel.clearArmedVisuals();
         if (gameUI && 'clearDemoPanelArmedVisuals' in gameUI) {
           (gameUI as any).clearDemoPanelArmedVisuals();
         }
         winPresentation.kill();
         engine.clearWinHighlight();
-        gameUI!.winBanner.hide();
-        gameUI!.hideError();
-
+        gameUI?.winBanner.hide();
+        gameUI?.hideError();
         alienCharacter?.playHit();
+        gameUI?.setBetSelectorEnabled(false);
+        
+        // Запускаем процесс debiting
+        const previousMatrix = engine.getVisibleMatrix();
+        roundMachine.dispatch({ type: 'BET_DEBITED', bet: context.bet, previousMatrix });
+        break;
 
-        currentBet = gameUI!.currentBet;
-        balance -= currentBet;
-        gameUI!.setBalance(balance, true);
-
-        const roundResult = await spinRoundController.playRound(currentBet);
-
-        isSpinning = false;
-
-        if (!roundResult.ok) {
-          balance += currentBet;
-          gameUI!.setBalance(balance, true);
-          gameUI!.showError(roundResult.error.message);
-          autoSpinActive = false;
-          gameUI!.setAutoSpinActive(false);
-          gameUI!.setBetSelectorEnabled(true);
-          return;
+      case 'error':
+        if (context.error) {
+          gameUI?.showError(context.error.message);
         }
+        roundMachine.dispatch({ type: 'CANCEL_AUTO_SPIN' });
+        gameUI?.setAutoSpinActive(false);
+        gameUI?.setBetSelectorEnabled(true);
+        window.setTimeout(() => {
+          roundMachine.dispatch({ type: 'ERROR_HANDLED' });
+        }, 100);
+        break;
 
-        const { winAmount, winningCells } = roundResult.response;
-
-        if (winAmount > 0) {
+      case 'presenting_win':
+        if (context.response) {
+          const { winAmount, winningCells } = context.response;
           engine.showWinHighlight(winningCells);
-          gameUI!.winBanner.prepareShow(winAmount);
+          gameUI?.winBanner.prepareShow(winAmount);
 
           winPresentation.play({
             highlighted: engine.getHighlightedCells(),
@@ -209,34 +207,64 @@ async function bootstrap(): Promise<void> {
           });
 
           soundService.playWin();
-          balance += winAmount;
           totalWin += winAmount;
-          gameUI!.setBalance(balance, true);
-          gameUI!.setTotalWin(totalWin, true);
+          gameUI?.setTotalWin(totalWin, true);
 
-          await winPresentation.waitForIntro();
-
-          if (autoSpinActive) {
-            await new Promise<void>((resolve) => window.setTimeout(resolve, AUTO_SPIN_WIN_PAUSE_MS));
-          }
+          void winPresentation.waitForIntro().then(() => {
+            const pauseMs = roundMachine.context.autoSpinActive ? AUTO_SPIN_WIN_PAUSE_MS : 0;
+            window.setTimeout(() => {
+              roundMachine.dispatch({ type: 'WIN_INTRO_DONE' });
+            }, pauseMs);
+          });
         }
+        break;
 
-        if (autoSpinActive && balance >= gameUI!.currentBet) {
-          handleSpin();
-        } else {
-          autoSpinActive = false;
-          gameUI!.setAutoSpinActive(false);
-          gameUI!.setBetSelectorEnabled(true);
+      case 'settling':
+        // Проверяем условия для продолжения auto-spin
+        const continueAutoSpin = 
+          roundMachine.context.autoSpinActive && 
+          balance >= currentBet;
+        
+        setTimeout(() => {
+          roundMachine.dispatch({ type: 'ROUND_COMPLETE', continueAutoSpin });
+        }, 100);
+        break;
+
+      case 'idle':
+        if (from !== 'idle') {
+          gameUI?.setBetSelectorEnabled(true);
         }
-      } catch (error: unknown) {
-        console.error('Spin failed:', error);
-        isSpinning = false;
-        autoSpinActive = false;
-        gameUI?.setAutoSpinActive(false);
-        gameUI?.setBetSelectorEnabled(true);
-      }
-    })();
-  };
+        break;
+    }
+  });
+
+  roundMachine.on('balance:changed', ({ balance: newBalance, reason }) => {
+    balance = newBalance;
+    gameUI?.setBalance(balance, true);
+    roundMachine.setBalance(balance);
+  });
+
+  roundMachine.on('effect', ({ type: effectType, data }) => {
+    switch (effectType) {
+      case 'start_reels':
+        engine.startSpin();
+        break;
+      case 'stop_reels':
+        if (data && data.matrix) {
+          engine.stopWithMatrix(data.matrix);
+        }
+        break;
+    }
+  });
+
+  roundMachine.on('round:complete', ({ continueAutoSpin }) => {
+    if (continueAutoSpin && roundMachine.context.autoSpinActive && balance >= currentBet) {
+      window.setTimeout(() => handleSpin(), 100);
+    } else {
+      roundMachine.dispatch({ type: 'CANCEL_AUTO_SPIN' });
+      gameUI?.setAutoSpinActive(false);
+    }
+  });
 
   function layoutScene(profileChanged: boolean): void {
     const currentProfile = layoutManager.currentProfile;
@@ -299,12 +327,6 @@ async function bootstrap(): Promise<void> {
   const lifecycleController = new AppLifecycleController({
     app,
     layoutScene: () => layoutScene(false),
-    cancelAutoSpin,
-    isSpinning: () => isSpinning,
-    isEngineIdle: () => engine.currentState === 'IDLE',
-    interruptSpin: () => spinRoundController.interrupt(),
-    resetUiAfterInterrupt,
-    killWinPresentation: () => winPresentation.kill(),
     unlockSound: () => soundService.unlockFromGesture(),
     getAppScreen: () => appScreen,
   });

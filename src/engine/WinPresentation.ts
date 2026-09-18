@@ -35,12 +35,22 @@ export class WinPresentation {
       this.resolveIntroDone = resolve;
     });
 
+    let alienDeathPromise: Promise<void> | undefined;
+
+    const finishIntro = (): void => {
+      this.startIdleLoop(ctx);
+      this.resolveIntroDone?.();
+      this.resolveIntroDone = null;
+    };
+
     const tl = gsap.timeline({
       defaults: { ease: 'power2.out' },
       onComplete: () => {
-        this.startIdleLoop(ctx);
-        this.resolveIntroDone?.();
-        this.resolveIntroDone = null;
+        if (alienDeathPromise) {
+          void alienDeathPromise.then(finishIntro);
+        } else {
+          finishIntro();
+        }
       },
     });
 
@@ -139,7 +149,7 @@ export class WinPresentation {
     // ── 5. Alien death ──
     if (ctx.alienCharacter) {
       tl.add(() => {
-        ctx.alienCharacter?.playDeath();
+        alienDeathPromise = ctx.alienCharacter!.playDeath();
       }, '-=0.3');
     }
 
