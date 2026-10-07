@@ -1,16 +1,19 @@
 import { Container, Text } from 'pixi.js';
-import { SpinMockMode, SpinService } from '../../services/SpinService';
+import { SpinMockMode, SpinService, SpinSourceSwitch } from '../../services/SpinService';
 import { DemoButton } from './DemoButton';
 
 export class PracticePanel extends Container {
   private readonly slowBtn: DemoButton;
   private readonly errorBtn: DemoButton;
+  private readonly sourceBtn: DemoButton;
   private readonly spinService: SpinService;
+  private readonly sourceSwitch: SpinSourceSwitch;
   private armedMode: SpinMockMode | null = null;
 
-  constructor(spinService: SpinService) {
+  constructor(spinService: SpinService, sourceSwitch: SpinSourceSwitch) {
     super();
     this.spinService = spinService;
+    this.sourceSwitch = sourceSwitch;
 
     const padding = 12;
     const gap = 8;
@@ -24,6 +27,12 @@ export class PracticePanel extends Container {
 
     y += title.height + gap;
 
+    this.sourceBtn = new DemoButton('Supabase', buttonWidth, buttonHeight, () => this.toggleSource());
+    this.sourceBtn.position.set(padding, y);
+    this.addChild(this.sourceBtn);
+
+    y += buttonHeight + gap;
+
     this.slowBtn = new DemoButton('Slow next', buttonWidth, buttonHeight, () => this.toggleMode('slow'));
     this.slowBtn.position.set(padding, y);
     this.addChild(this.slowBtn);
@@ -33,6 +42,8 @@ export class PracticePanel extends Container {
     this.errorBtn = new DemoButton('Error next', buttonWidth, buttonHeight, () => this.toggleMode('error'));
     this.errorBtn.position.set(padding, y);
     this.addChild(this.errorBtn);
+
+    this.syncFromService();
   }
 
   /** Сбрасывает подсветку после того, как режим применён к спину. */
@@ -41,7 +52,26 @@ export class PracticePanel extends Container {
     this.updateButtonStates();
   }
 
+  syncFromService(): void {
+    if (this.spinService.getSource() === 'supabase') {
+      this.armedMode = null;
+      this.spinService.disarmNextSpin();
+    }
+    this.updateButtonStates();
+  }
+
+  private toggleSource(): void {
+    if (!this.sourceSwitch.canSwitch()) {
+      return;
+    }
+    this.sourceSwitch.onToggle();
+  }
+
   private toggleMode(mode: SpinMockMode): void {
+    if (this.spinService.getSource() !== 'mock') {
+      return;
+    }
+
     if (this.armedMode === mode) {
       this.spinService.disarmNextSpin();
       this.armedMode = null;
@@ -54,7 +84,11 @@ export class PracticePanel extends Container {
   }
 
   private updateButtonStates(): void {
-    this.slowBtn.setActive(this.armedMode === 'slow');
-    this.errorBtn.setActive(this.armedMode === 'error');
+    const isMock = this.spinService.getSource() === 'mock';
+    this.sourceBtn.setActive(!isMock);
+    this.slowBtn.setEnabled(isMock);
+    this.errorBtn.setEnabled(isMock);
+    this.slowBtn.setActive(isMock && this.armedMode === 'slow');
+    this.errorBtn.setActive(isMock && this.armedMode === 'error');
   }
 }

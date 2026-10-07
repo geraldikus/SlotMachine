@@ -1,7 +1,7 @@
 import { DEFAULT_BET, INITIAL_BALANCE, INITIAL_TOTAL_WIN } from '../../config/currency';
 import { LayoutProfile } from '../../layout/types';
 import { SoundService } from '../../services/SoundService';
-import { SpinService } from '../../services/SpinService';
+import { SpinService, SpinSourceSwitch } from '../../services/SpinService';
 import { AnimatedCounter } from '../AnimatedCounter';
 import { AutoSpinButton } from '../AutoSpinButton';
 import { CurrencyUI } from '../CurrencyUI';
@@ -29,6 +29,7 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
     onAutoSpin: () => void,
     soundService: SoundService,
     spinService: SpinService,
+    sourceSwitch: SpinSourceSwitch,
   ) {
     const headerButtonsWidth = 44 * 2 + 8;
     const leftOffset = headerButtonsWidth + 8;
@@ -47,7 +48,7 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
     headerButtons.position.set(profile.padding, profile.padding);
     this.addChild(headerButtons);
 
-    this.demoPopover = new DemoPanelPopover(spinService, profile);
+    this.demoPopover = new DemoPanelPopover(spinService, profile, sourceSwitch);
     const popoverX = profile.designWidth - profile.padding - (profile.getPracticePanelButtonWidth() + 24);
     this.demoPopover.position.set(popoverX, profile.padding + 56 + 12);
     this.demoPopover.zIndex = 10;
@@ -131,6 +132,10 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
 
   clearDemoPanelArmedVisuals(): void {
     this.demoPopover.clearArmedVisuals();
+  }
+
+  syncDemoPanel(): void {
+    this.demoPopover.syncFromService();
   }
 
   update(): void {

@@ -1,0 +1,4 @@
+project_id = "slotMachine"
+
+[functions.spin]
+verify_jwt = true

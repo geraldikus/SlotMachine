@@ -226,10 +226,18 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
 
   private handleSettlingState(event: RoundEvent): void {
     if (event.type === 'ROUND_COMPLETE') {
-      // Обновляем баланс если был выигрыш
-      if (this._context.response && this._context.response.winAmount > 0) {
-        this._context.balance += this._context.response.winAmount;
-        this._context.totalWin += this._context.response.winAmount;
+      const response = this._context.response;
+      if (response && response.balance !== undefined) {
+        this._context.balance = response.balance;
+        if (response.totalWin !== undefined) {
+          this._context.totalWin = response.totalWin;
+        }
+        if (response.winAmount > 0) {
+          this.emit('balance:changed', { balance: this._context.balance, reason: 'win' });
+        }
+      } else if (response && response.winAmount > 0) {
+        this._context.balance += response.winAmount;
+        this._context.totalWin += response.winAmount;
         this.emit('balance:changed', { balance: this._context.balance, reason: 'win' });
       }
 
@@ -266,7 +274,11 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
     // Отменяем текущий запрос
     this._context.currentRequestId = null;
 
+    const requestAlreadySent = this._state === 'spinning';
+    const skipRefund = this.spinService.getSource() === 'supabase' && requestAlreadySent;
+
     if (
+      !skipRefund &&
       (this._state === 'debiting' || this._state === 'spinning') &&
       this._context.bet > 0 &&
       !this._context.error

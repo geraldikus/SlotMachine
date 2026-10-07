@@ -10,6 +10,7 @@ export class DemoButton extends Container {
   private readonly onTap: () => void;
   private icon: Sprite | null = null;
   private isActive = false;
+  private isEnabled = true;
   private readonly background: Graphics;
 
   constructor(title: string, btnWidth: number, btnHeight: number, onTap: () => void) {
@@ -36,19 +37,29 @@ export class DemoButton extends Container {
     this.drawBackground(active ? ACTIVE_COLOR : INACTIVE_COLOR);
   }
 
+  setEnabled(enabled: boolean): void {
+    this.isEnabled = enabled;
+    this.eventMode = enabled ? 'static' : 'none';
+    this.cursor = enabled ? 'pointer' : 'default';
+    this.alpha = enabled ? 1 : 0.4;
+  }
+
   private drawBackground(color: number): void {
     this.background.clear();
     this.background.roundRect(0, 0, this.btnWidth, this.btnHeight, 8).fill(color);
   }
 
   private handlePointerDown = (): void => {
+    if (!this.isEnabled) {
+      return;
+    }
     this.alpha = 0.85;
     this.spinIcon();
     this.onTap();
   };
 
   private handlePointerUp = (): void => {
-    this.alpha = 1;
+    this.alpha = this.isEnabled ? 1 : 0.4;
     this.drawBackground(this.isActive ? ACTIVE_COLOR : INACTIVE_COLOR);
   };
 

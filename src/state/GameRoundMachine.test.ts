@@ -37,6 +37,7 @@ function createHarness(requestId = 'spin_test_1') {
       spinHandlers[event] = spinHandlers[event] ?? [];
       spinHandlers[event].push(handler);
     }),
+    getSource: vi.fn(() => 'mock' as 'mock' | 'supabase'),
     requestSpin: vi.fn((bet: number) => {
       spinHandlers['spin:requested']?.forEach((handler) =>
         handler({ requestId: currentRequestId, bet }),
@@ -139,6 +140,33 @@ describe('GameRoundMachine', () => {
       expect(stateChanges).toContain('spinning->stopping');
       expect(stateChanges).toContain('stopping->settling');
       expect(stateChanges).toContain('settling->idle');
+    });
+
+    it('uses server wallet from response instead of adding win locally', () => {
+      const { machine, spinService, engine, minSpinMs } = createHarness();
+      const balanceChanges: Array<{ balance: number; reason: string }> = [];
+
+      machine.on('balance:changed', (event) => {
+        balanceChanges.push({ balance: event.balance, reason: event.reason });
+      });
+
+      startRound(machine, 10);
+      spinService.emitSuccess({
+        ...winResponse(30),
+        balance: 1020,
+        totalWin: 30,
+      });
+      vi.advanceTimersByTime(minSpinMs);
+      engine.emitAllStopped();
+      machine.dispatch({ type: 'WIN_INTRO_DONE' });
+      machine.dispatch({ type: 'ROUND_COMPLETE', continueAutoSpin: false });
+
+      expect(machine.context.balance).toBe(1020);
+      expect(machine.context.totalWin).toBe(30);
+      expect(balanceChanges).toEqual([
+        { balance: 90, reason: 'debit' },
+        { balance: 1020, reason: 'win' },
+      ]);
     });
 
     it('completes a winning round and credits win on settle', () => {
@@ -246,6 +274,17 @@ describe('GameRoundMachine', () => {
   });
 
   describe('Прерывание', () => {
+    it('does not refund locally on INTERRUPT in supabase mode', () => {
+      const { machine, spinService } = createHarness();
+      spinService.getSource.mockReturnValue('supabase');
+
+      startRound(machine, 10);
+      machine.dispatch({ type: 'INTERRUPT' });
+
+      expect(machine.state).toBe('idle');
+      expect(machine.context.balance).toBe(90);
+    });
+
     it('refunds and resets on INTERRUPT during spin', () => {
       const { machine, engine } = createHarness();
       const balanceChanges: Array<{ balance: number; reason: string }> = [];

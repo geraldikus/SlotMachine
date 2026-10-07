@@ -103,6 +103,63 @@ describe('SpinService', () => {
     }
   });
 
+  it('does not generate a local matrix when source is supabase', async () => {
+    const supabaseSpin = vi.fn(async () => ({
+      matrix: [
+        ['a', 'b', 'c', 'd'],
+        ['b', 'c', 'd', 'a'],
+        ['c', 'd', 'a', 'b'],
+      ],
+      winAmount: 30,
+      winningCells: [{ row: 0, col: 0 }],
+      balance: 1020,
+      totalWin: 30,
+    }));
+    const service = new SpinService(TEST_SYMBOLS, supabaseSpin);
+    service.setSource('supabase');
+
+    const requested: Array<{ requestId: string; bet: number }> = [];
+    service.on('spin:requested', (data) => requested.push(data));
+
+    const promise = service.requestSpin(10);
+    await vi.advanceTimersByTimeAsync(0);
+    const response = await promise;
+
+    expect(requested).toHaveLength(1);
+    expect(supabaseSpin).toHaveBeenCalledWith(10);
+    expect(response).toEqual({
+      matrix: [
+        ['a', 'b', 'c', 'd'],
+        ['b', 'c', 'd', 'a'],
+        ['c', 'd', 'a', 'b'],
+      ],
+      winAmount: 30,
+      winningCells: [{ row: 0, col: 0 }],
+      balance: 1020,
+      totalWin: 30,
+    });
+  });
+
+  it('ignores armed mock modes in supabase source', async () => {
+    const supabaseSpin = vi.fn(async () => ({
+      matrix: [
+        ['a', 'b', 'c', 'd'],
+        ['b', 'c', 'd', 'a'],
+        ['c', 'd', 'a', 'b'],
+      ],
+      winAmount: 0,
+      winningCells: [],
+    }));
+    const service = new SpinService(TEST_SYMBOLS, supabaseSpin);
+    service.setSource('supabase');
+    service.armNextSpin('error');
+
+    const promise = service.requestSpin(10);
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(promise).resolves.toBeDefined();
+    expect(supabaseSpin).toHaveBeenCalledOnce();
+  });
+
   it('generates unique requestIds across spins', async () => {
     const service = new SpinService(TEST_SYMBOLS);
     const ids: string[] = [];

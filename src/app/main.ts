@@ -8,7 +8,8 @@ import { SlotEngine } from '../engine/SlotEngine';
 import { WinPresentation } from '../engine/WinPresentation';
 import { LayoutManager } from '../layout/LayoutManager';
 import { SoundService } from '../services/SoundService';
-import { SpinService } from '../services/SpinService';
+import { SpinService, SpinSourceSwitch } from '../services/SpinService';
+import { connectSupabaseProfile } from '../services/supabaseClient';
 import { DesktopGameUI } from '../ui/desktop/DesktopGameUI';
 import { getSpritesheet, SpriteAtlasDebugPanel } from '../ui/debug/SpriteAtlasDebugPanel';
 import { IGameUI } from '../ui/IGameUI';
@@ -30,11 +31,12 @@ function createGameUI(
   onAutoSpin: () => void,
   soundService: SoundService,
   spinService: SpinService,
+  sourceSwitch: SpinSourceSwitch,
 ): IGameUI & Container {
   if (profile.id === 'desktop') {
     return new DesktopGameUI(profile, onSpin, onAutoSpin);
   }
-  return new MobileGameUI(profile, onSpin, onAutoSpin, soundService, spinService);
+  return new MobileGameUI(profile, onSpin, onAutoSpin, soundService, spinService, sourceSwitch);
 }
 
 async function bootstrap(): Promise<void> {
@@ -114,16 +116,71 @@ async function bootstrap(): Promise<void> {
   const spinService = new SpinService();
   const roundMachine = new GameRoundMachine(engine, spinService, MIN_SPIN_MS);
 
-  const practicePanel = new PracticePanel(spinService);
-  practicePanel.position.set(12, 12);
-  practicePanel.visible = false;
-  app.stage.addChild(practicePanel);
-
   let balance = INITIAL_BALANCE;
   let totalWin = INITIAL_TOTAL_WIN;
   let currentBet: number = DEFAULT_BET;
   let gameUI: (IGameUI & Container) | null = null;
   let alienCharacter: AlienCharacter | null = null;
+  let sourceSwitchInFlight = false;
+
+  const applyWallet = (nextBalance: number, nextTotalWin: number, animate = false): void => {
+    balance = nextBalance;
+    totalWin = nextTotalWin;
+    roundMachine.setBalance(balance);
+    roundMachine.setTotalWin(totalWin);
+    gameUI?.setBalance(balance, animate);
+    gameUI?.setTotalWin(totalWin, animate);
+  };
+
+  const syncSourceUi = (): void => {
+    practicePanel.syncFromService();
+    if (gameUI && 'syncDemoPanel' in gameUI) {
+      (gameUI as MobileGameUI).syncDemoPanel();
+    }
+  };
+
+  const sourceSwitch: SpinSourceSwitch = {
+    canSwitch: () => roundMachine.matches('idle') && !sourceSwitchInFlight,
+    onToggle: () => {
+      void handleSourceToggle();
+    },
+  };
+
+  const handleSourceToggle = async (): Promise<void> => {
+    if (!sourceSwitch.canSwitch()) {
+      return;
+    }
+
+    sourceSwitchInFlight = true;
+    const nextSource = spinService.getSource() === 'mock' ? 'supabase' : 'mock';
+
+    try {
+      if (nextSource === 'supabase') {
+        const profile = await connectSupabaseProfile();
+        spinService.setSource('supabase');
+        applyWallet(profile.balance, profile.totalWin);
+      } else {
+        spinService.setSource('mock');
+        applyWallet(INITIAL_BALANCE, INITIAL_TOTAL_WIN);
+      }
+      practicePanel.clearArmedVisuals();
+      if (gameUI && 'clearDemoPanelArmedVisuals' in gameUI) {
+        (gameUI as MobileGameUI).clearDemoPanelArmedVisuals();
+      }
+    } catch (error) {
+      spinService.setSource('mock');
+      const message = error instanceof Error ? error.message : 'Supabase connection failed';
+      gameUI?.showError(message);
+    } finally {
+      sourceSwitchInFlight = false;
+      syncSourceUi();
+    }
+  };
+
+  const practicePanel = new PracticePanel(spinService, sourceSwitch);
+  practicePanel.position.set(12, 12);
+  practicePanel.visible = false;
+  app.stage.addChild(practicePanel);
 
   // Инициализируем баланс в FSM
   roundMachine.setBalance(balance);
@@ -207,7 +264,7 @@ async function bootstrap(): Promise<void> {
           });
 
           soundService.playWin();
-          totalWin += winAmount;
+          totalWin = context.response.totalWin ?? totalWin + winAmount;
           gameUI?.setTotalWin(totalWin, true);
 
           void winPresentation.waitForIntro().then(() => {
@@ -242,6 +299,10 @@ async function bootstrap(): Promise<void> {
     balance = newBalance;
     gameUI?.setBalance(balance, true);
     roundMachine.setBalance(balance);
+    if (reason === 'win') {
+      totalWin = roundMachine.context.totalWin;
+      gameUI?.setTotalWin(totalWin, true);
+    }
   });
 
   roundMachine.on('effect', ({ type: effectType, data }) => {
@@ -281,7 +342,14 @@ async function bootstrap(): Promise<void> {
     if (profileChanged || !gameUI) {
       const previousState = gameUI?.getState();
       gameUI?.destroy({ children: true });
-      gameUI = createGameUI(currentProfile, handleSpin, handleAutoSpinToggle, soundService, spinService);
+      gameUI = createGameUI(
+        currentProfile,
+        handleSpin,
+        handleAutoSpinToggle,
+        soundService,
+        spinService,
+        sourceSwitch,
+      );
       gameUI.zIndex = 3;
       gameRoot.addChild(gameUI);
       gameUI.applyState({
@@ -292,6 +360,7 @@ async function bootstrap(): Promise<void> {
       balance = previousState?.balance ?? balance;
       totalWin = previousState?.totalWin ?? totalWin;
       currentBet = previousState?.bet ?? currentBet;
+      syncSourceUi();
     }
 
     const isDesktop = currentProfile.id === 'desktop';
