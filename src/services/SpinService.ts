@@ -2,7 +2,10 @@ import { EventEmitter } from 'eventemitter3';
 import { calcWinAmount } from '../config/currency';
 import { SYMBOLS } from '../config/symbols';
 import { CellPosition, ResultMatrix, SymbolKey } from '../config/types';
+import { createRoundSeed } from '../logic/rng';
 import { findWinLine, generateLosingMatrix, generateWinningMatrix } from '../logic/win';
+import { GAME_VERSION, MATH_VERSION, RoundStep } from '../round/types';
+import { InMemoryRoundHistory } from './InMemoryRoundHistory';
 import { invokeSupabaseSpin } from './supabaseClient';
 
 export interface SpinResponse {
@@ -11,6 +14,11 @@ export interface SpinResponse {
   winningCells: CellPosition[];
   balance?: number;
   totalWin?: number;
+  roundId?: string;
+  seed?: string;
+  steps?: RoundStep[];
+  gameVersion?: string;
+  mathVersion?: string;
 }
 
 export type SpinMockMode = 'slow' | 'error';
@@ -76,8 +84,13 @@ export class SpinService extends EventEmitter<SpinServiceEvents> {
   constructor(
     private readonly symbols: SymbolKey[] = SYMBOLS,
     private readonly supabaseSpin: SupabaseSpinInvoker = invokeSupabaseSpin,
+    private readonly mockHistory = new InMemoryRoundHistory(),
   ) {
     super();
+  }
+
+  getMockHistory(): InMemoryRoundHistory {
+    return this.mockHistory;
   }
 
   getSource(): SpinSource {
@@ -156,11 +169,39 @@ export class SpinService extends EventEmitter<SpinServiceEvents> {
       : generateLosingMatrix(this.symbols);
 
     const winLine = findWinLine(matrix);
+    const winAmount = winLine ? calcWinAmount(bet) : 0;
+    const steps: RoundStep[] = [
+      {
+        type: 'base',
+        matrix,
+        winningCells: winLine?.cells ?? [],
+        win: winAmount,
+      },
+    ];
+    const roundId = crypto.randomUUID();
+    const seed = createRoundSeed();
+    const createdAt = new Date().toISOString();
+
+    this.mockHistory.record({
+      id: roundId,
+      createdAt,
+      gameVersion: GAME_VERSION,
+      mathVersion: MATH_VERSION,
+      seed,
+      bet,
+      totalWin: winAmount,
+      steps,
+    });
 
     return {
       matrix,
-      winAmount: winLine ? calcWinAmount(bet) : 0,
+      winAmount,
       winningCells: winLine?.cells ?? [],
+      roundId,
+      seed,
+      steps,
+      gameVersion: GAME_VERSION,
+      mathVersion: MATH_VERSION,
     };
   }
 }

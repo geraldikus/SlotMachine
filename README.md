@@ -35,7 +35,7 @@ The grid is 3 visible rows by 4 reels. A win is three identical symbols in a row
 
 Bets are a fixed list: 1.5, 3, 5, 8, 10, 15, 20, 30, 50 FUN. A new session starts at 1000 FUN.
 
-In both mock and Supabase mode, every third spin is a win. The client does not invent the matrix when the source is Supabase: the Edge Function builds it and `apply_spin` writes the balance.
+In both mock and Supabase mode, every third spin is a win. The client does not invent the matrix when the source is Supabase: the Edge Function builds it and `apply_round` writes the balance and the round.
 
 ## Architecture
 
@@ -57,7 +57,9 @@ flowchart LR
 | `src/ui` | Desktop and mobile HUD, banners, sound, launch screen |
 | `src/state` | Round state machine |
 | `src/engine` | Reels, symbols, win-line overlay |
-| `src/services` | Spin requests, Supabase client, sound |
+| `src/services` | Spin requests, round history, Supabase client, sound |
+| `src/replay` | Round playback that does not touch the wallet |
+| `src/round` | Shared round record and version constants |
 | `src/logic` | Win-line detection and matrix generation |
 | `src/layout` | Desktop and mobile layout profiles |
 | `src/character` | Spine alien |
@@ -90,10 +92,20 @@ Switching to Supabase signs the player in anonymously and loads `profiles.balanc
 
 1. Rejects an unknown bet or a balance that cannot cover it.
 2. Treats every third spin as a win and builds the matrix on the server.
-3. Persists the round through the `apply_spin` RPC and returns the matrix, win, and new balance.
+3. Persists the round through the `apply_round` RPC and returns the matrix, win, balance, seed, and steps.
 4. Drops anonymous demo users and spin rows older than 24 hours.
 
-The published anon key is enough for the browser. Service-role keys stay on the server.
+The published anon key is enough for the browser. Service-role keys stay on the server. The Edge Function calls `apply_round` with the service-role key, so the browser cannot write a round or a balance directly.
+
+## Replay
+
+Each completed round is stored in `public.rounds` for 24 hours: the bet, the win, a seed, `game_version`, `math_version`, and a `steps` array. A base game has one step. Later features such as free spins can append steps without changing the table.
+
+The History button in the demo panel lists the player's own rounds. Replay plays those steps through `ReplayPlayer`. It never debits, credits, or refunds the balance, and it does not call `SpinService`. The filler symbols on the reels come from a seeded generator, so the same round draws the same symbol sequence. Stop timing still follows the frame clock, so the replay matches the outcome and the symbol order, not every frame.
+
+A round whose `game_version` is not in the client's supported list shows "Replay недоступен для этой версии игры". A missing or expired id shows "Раунд не найден или истёк".
+
+Mock mode keeps the same history in memory, so replay works without Supabase.
 
 A demo panel (desktop practice panel, mobile popover) can switch the source and, in mock mode only, force the next spin to be slow or to fail.
 

@@ -9,6 +9,7 @@ import { SpinButton } from '../SpinButton';
 import { BALANCE_VALUE_STYLE, LABEL_STYLE, WIN_VALUE_STYLE } from '../uiStyles';
 import { ErrorBanner } from '../ErrorBanner';
 import { WinBanner } from '../WinBanner';
+import { ReplayBadge } from '../ReplayBadge';
 
 export class DesktopGameUI extends Container implements IGameUI {
   readonly winBanner: WinBanner;
@@ -18,10 +19,17 @@ export class DesktopGameUI extends Container implements IGameUI {
   private readonly winCounter: AnimatedCounter;
   private readonly spinButton: SpinButton;
   private readonly autoSpinButton: AutoSpinButton;
+  private readonly replayBadge: ReplayBadge;
   private autoSpinActive = false;
   private betControlsEnabled = true;
+  private replayMode = false;
 
-  constructor(profile: LayoutProfile, onSpin: () => void, onAutoSpin: () => void) {
+  constructor(
+    profile: LayoutProfile,
+    onSpin: () => void,
+    onAutoSpin: () => void,
+    onExitReplay: () => void,
+  ) {
     super();
 
     const panel = profile.getSlotFrameBounds();
@@ -67,6 +75,12 @@ export class DesktopGameUI extends Container implements IGameUI {
     this.errorBanner = new ErrorBanner(profile);
     this.errorBanner.position.y += 52;
     this.addChild(this.errorBanner);
+
+    this.replayBadge = new ReplayBadge(onExitReplay);
+    this.replayBadge.position.set(panel.x + panel.width / 2 - 94, profile.padding + profile.headerHeight + 16);
+    this.replayBadge.zIndex = 20;
+    this.sortableChildren = true;
+    this.addChild(this.replayBadge);
   }
 
   private createTopBar(
@@ -136,6 +150,9 @@ export class DesktopGameUI extends Container implements IGameUI {
 
   setBetSelectorEnabled(enabled: boolean): void {
     this.betControlsEnabled = enabled;
+    if (this.replayMode) {
+      return;
+    }
     this.betSelector.setEnabled(enabled);
     this.spinButton.setEnabled(enabled && !this.autoSpinActive);
 
@@ -153,8 +170,26 @@ export class DesktopGameUI extends Container implements IGameUI {
     }
   }
 
+  setReplayMode(active: boolean): void {
+    this.replayMode = active;
+    this.replayBadge.visible = active;
+    if (active) {
+      this.betSelector.setEnabled(false);
+      this.spinButton.setEnabled(false);
+      this.autoSpinButton.setEnabled(false);
+      return;
+    }
+
+    this.autoSpinButton.setEnabled(true);
+    this.setBetSelectorEnabled(this.betControlsEnabled);
+    this.setAutoSpinActive(this.autoSpinActive);
+  }
+
   setAutoSpinActive(active: boolean): void {
     this.autoSpinActive = active;
+    if (this.replayMode) {
+      return;
+    }
     this.autoSpinButton.setActive(active);
     this.spinButton.setEnabled(this.betControlsEnabled && !active);
   }

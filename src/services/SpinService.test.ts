@@ -1,5 +1,6 @@
 import { calcWinAmount } from '../config/currency';
 import { findWinLine } from '../logic/win';
+import { GAME_VERSION, MATH_VERSION } from '../round/types';
 import { SpinRequestError, SpinService } from './SpinService';
 
 const TEST_SYMBOLS = ['a', 'b', 'c', 'd', 'e', 'f'];
@@ -158,6 +159,48 @@ describe('SpinService', () => {
     await vi.advanceTimersByTimeAsync(0);
     await expect(promise).resolves.toBeDefined();
     expect(supabaseSpin).toHaveBeenCalledOnce();
+  });
+
+  it('returns round metadata and stores the mock round', async () => {
+    const service = new SpinService(TEST_SYMBOLS);
+
+    const promise = service.requestSpin(10);
+    await vi.advanceTimersByTimeAsync(500);
+    const response = await promise;
+
+    expect(response.roundId).toEqual(expect.any(String));
+    expect(response.seed).toMatch(/^[0-9a-f]{32}$/);
+    expect(response.gameVersion).toBe(GAME_VERSION);
+    expect(response.mathVersion).toBe(MATH_VERSION);
+    expect(response.steps).toEqual([
+      {
+        type: 'base',
+        matrix: response.matrix,
+        winningCells: response.winningCells,
+        win: response.winAmount,
+      },
+    ]);
+    expect(service.getMockHistory().listRecent()).toEqual([
+      expect.objectContaining({
+        id: response.roundId,
+        seed: response.seed,
+        bet: 10,
+        totalWin: response.winAmount,
+        steps: response.steps,
+      }),
+    ]);
+  });
+
+  it('does not store a failed mock spin', async () => {
+    const service = new SpinService(TEST_SYMBOLS);
+    service.armNextSpin('error');
+
+    const promise = service.requestSpin(10);
+    const rejection = expect(promise).rejects.toThrow('Network error');
+    await vi.advanceTimersByTimeAsync(700);
+    await rejection;
+
+    expect(service.getMockHistory().listRecent()).toEqual([]);
   });
 
   it('generates unique requestIds across spins', async () => {

@@ -9,11 +9,17 @@ export class DemoPanelPopover extends Container {
   private readonly sourceBtn: DemoButton;
   private readonly slowBtn: DemoButton;
   private readonly errorBtn: DemoButton;
+  private readonly historyBtn: DemoButton;
   private armedMode: SpinMockMode | null = null;
   private readonly padding = 12;
   private readonly gap = 8;
 
-  constructor(spinService: SpinService, profile: LayoutProfile, sourceSwitch: SpinSourceSwitch) {
+  constructor(
+    spinService: SpinService,
+    profile: LayoutProfile,
+    sourceSwitch: SpinSourceSwitch,
+    onOpenHistory: () => void,
+  ) {
     super();
     this.spinService = spinService;
     this.sourceSwitch = sourceSwitch;
@@ -23,7 +29,7 @@ export class DemoPanelPopover extends Container {
     const buttonWidth = profile.getPracticePanelButtonWidth();
     const buttonHeight = 36;
     const panelWidth = buttonWidth + this.padding * 2;
-    const panelHeight = this.padding * 2 + 14 + this.gap + buttonHeight * 3 + this.gap * 2;
+    const panelHeight = this.padding * 2 + 14 + this.gap + buttonHeight * 4 + this.gap * 3;
 
     this.hitArea = new Rectangle(0, 0, panelWidth, panelHeight);
 
@@ -55,6 +61,12 @@ export class DemoPanelPopover extends Container {
     this.errorBtn = new DemoButton('Error next', buttonWidth, buttonHeight, () => this.toggleMode('error'));
     this.errorBtn.position.set(this.padding, y);
     this.addChild(this.errorBtn);
+
+    y += buttonHeight + this.gap;
+
+    this.historyBtn = new DemoButton('History', buttonWidth, buttonHeight, onOpenHistory);
+    this.historyBtn.position.set(this.padding, y);
+    this.addChild(this.historyBtn);
 
     this.syncFromService();
   }

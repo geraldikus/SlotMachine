@@ -11,6 +11,7 @@ import { ErrorBanner } from '../ErrorBanner';
 import { WinBanner } from '../WinBanner';
 import { HeaderButtons } from './HeaderButtons';
 import { DemoPanelPopover } from './DemoPanelPopover';
+import { ReplayBadge } from '../ReplayBadge';
 
 export class MobileGameUI extends CurrencyUI implements IGameUI {
   readonly winBanner: WinBanner;
@@ -20,8 +21,10 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
   private readonly spinButton: SpinButton;
   private readonly autoSpinButton: AutoSpinButton;
   private readonly demoPopover: DemoPanelPopover;
+  private readonly replayBadge: ReplayBadge;
   private autoSpinActive = false;
   private betControlsEnabled = true;
+  private replayMode = false;
 
   constructor(
     profile: LayoutProfile,
@@ -30,6 +33,8 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
     soundService: SoundService,
     spinService: SpinService,
     sourceSwitch: SpinSourceSwitch,
+    onExitReplay: () => void,
+    onOpenHistory: () => void,
   ) {
     const headerButtonsWidth = 44 * 2 + 8;
     const leftOffset = headerButtonsWidth + 8;
@@ -48,7 +53,10 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
     headerButtons.position.set(profile.padding, profile.padding);
     this.addChild(headerButtons);
 
-    this.demoPopover = new DemoPanelPopover(spinService, profile, sourceSwitch);
+    this.demoPopover = new DemoPanelPopover(spinService, profile, sourceSwitch, () => {
+      this.demoPopover.close();
+      onOpenHistory();
+    });
     const popoverX = profile.designWidth - profile.padding - (profile.getPracticePanelButtonWidth() + 24);
     this.demoPopover.position.set(popoverX, profile.padding + 56 + 12);
     this.demoPopover.zIndex = 10;
@@ -81,6 +89,12 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
     this.autoSpinButton = new AutoSpinButton(spinWidth, profile, onAutoSpin);
     this.autoSpinButton.position.set(autoSpinX, spinLayout.y);
     this.addChild(this.autoSpinButton);
+
+    this.replayBadge = new ReplayBadge(onExitReplay);
+    this.replayBadge.position.set(profile.designWidth / 2 - 94, profile.padding + 72);
+    this.replayBadge.zIndex = 20;
+    this.sortableChildren = true;
+    this.addChild(this.replayBadge);
   }
 
   get currentBet(): number {
@@ -111,14 +125,35 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
 
   setBetSelectorEnabled(enabled: boolean): void {
     this.betControlsEnabled = enabled;
+    if (this.replayMode) {
+      return;
+    }
     this.betSelector.setEnabled(enabled);
     this.spinButton.setEnabled(enabled && !this.autoSpinActive);
   }
 
   setAutoSpinActive(active: boolean): void {
     this.autoSpinActive = active;
+    if (this.replayMode) {
+      return;
+    }
     this.autoSpinButton.setActive(active);
     this.spinButton.setEnabled(this.betControlsEnabled && !active);
+  }
+
+  setReplayMode(active: boolean): void {
+    this.replayMode = active;
+    this.replayBadge.visible = active;
+    if (active) {
+      this.betSelector.setEnabled(false);
+      this.spinButton.setEnabled(false);
+      this.autoSpinButton.setEnabled(false);
+      return;
+    }
+
+    this.autoSpinButton.setEnabled(true);
+    this.setBetSelectorEnabled(this.betControlsEnabled);
+    this.setAutoSpinActive(this.autoSpinActive);
   }
 
   showError(message: string): void {

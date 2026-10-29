@@ -42,7 +42,7 @@ export class Reel extends Container {
   private targetSymbols: SymbolKey[] | null = null;
   private pendingSymbols: SymbolKey[] = [];
   private stopDistanceRemaining = 0;
-  private randomKeyIndex = 0;
+  private nextRandom: () => number = Math.random;
   private snapTween?: gsap.core.Tween;
   private juiceTween?: gsap.core.Timeline;
 
@@ -88,6 +88,10 @@ export class Reel extends Container {
       this.getVisibleCell(1).getSymbol(),
       this.getVisibleCell(2).getSymbol(),
     ];
+  }
+
+  setRng(nextRandom: () => number): void {
+    this.nextRandom = nextRandom;
   }
 
   startSpin(): void {
@@ -198,9 +202,7 @@ export class Reel extends Container {
       return this.pendingSymbols.shift()!;
     }
 
-    const key = this.symbolKeys[this.randomKeyIndex % this.symbolKeys.length];
-    this.randomKeyIndex += 1;
-    return key;
+    return this.randomFillerSymbol();
   }
 
   private estimateTotalDecelerationDistance(): number {
@@ -287,9 +289,8 @@ export class Reel extends Container {
   }
 
   private randomFillerSymbol(): SymbolKey {
-    const key = this.symbolKeys[this.randomKeyIndex % this.symbolKeys.length];
-    this.randomKeyIndex += 1;
-    return key;
+    const index = Math.floor(this.nextRandom() * this.symbolKeys.length);
+    return this.symbolKeys[index] ?? this.symbolKeys[0];
   }
 
   private beginSnap(): void {

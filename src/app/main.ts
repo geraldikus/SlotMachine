@@ -7,9 +7,13 @@ import { AppScreen } from '../config/types';
 import { SlotEngine } from '../engine/SlotEngine';
 import { WinPresentation } from '../engine/WinPresentation';
 import { LayoutManager } from '../layout/LayoutManager';
+import { presentWin } from '../presentation/presentWin';
+import { ReplayPlayer } from '../replay/ReplayPlayer';
 import { SoundService } from '../services/SoundService';
+import { RoundHistoryError, RoundHistoryService } from '../services/RoundHistoryService';
 import { SpinService, SpinSourceSwitch } from '../services/SpinService';
 import { connectSupabaseProfile } from '../services/supabaseClient';
+import { HistoryPanel } from '../ui/history/HistoryPanel';
 import { DesktopGameUI } from '../ui/desktop/DesktopGameUI';
 import { getSpritesheet, SpriteAtlasDebugPanel } from '../ui/debug/SpriteAtlasDebugPanel';
 import { IGameUI } from '../ui/IGameUI';
@@ -32,11 +36,22 @@ function createGameUI(
   soundService: SoundService,
   spinService: SpinService,
   sourceSwitch: SpinSourceSwitch,
+  onExitReplay: () => void,
+  onOpenHistory: () => void,
 ): IGameUI & Container {
   if (profile.id === 'desktop') {
-    return new DesktopGameUI(profile, onSpin, onAutoSpin);
+    return new DesktopGameUI(profile, onSpin, onAutoSpin, onExitReplay);
   }
-  return new MobileGameUI(profile, onSpin, onAutoSpin, soundService, spinService, sourceSwitch);
+  return new MobileGameUI(
+    profile,
+    onSpin,
+    onAutoSpin,
+    soundService,
+    spinService,
+    sourceSwitch,
+    onExitReplay,
+    onOpenHistory,
+  );
 }
 
 async function bootstrap(): Promise<void> {
@@ -115,6 +130,99 @@ async function bootstrap(): Promise<void> {
   const winPresentation = new WinPresentation();
   const spinService = new SpinService();
   const roundMachine = new GameRoundMachine(engine, spinService, MIN_SPIN_MS);
+  const historyService = new RoundHistoryService(
+    () => spinService.getSource(),
+    spinService.getMockHistory(),
+  );
+  const historyPanel = new HistoryPanel((roundId) => {
+    void startReplay(roundId);
+  });
+  app.stage.addChild(historyPanel);
+
+  const replayPlayer = new ReplayPlayer({
+    engine,
+    minSpinMs: MIN_SPIN_MS,
+    canPlay: () => roundMachine.matches('idle') && !roundMachine.context.autoSpinActive,
+    presentWin: async (step) => {
+      if (!gameUI) {
+        return;
+      }
+      await presentWin({
+        engine,
+        winPresentation,
+        banner: gameUI.winBanner,
+        amount: step.win,
+        winningCells: step.winningCells,
+        gameRoot,
+        soundService,
+        alienCharacter: alienCharacter ?? undefined,
+      });
+    },
+  });
+
+  function exitReplay(): void {
+    winPresentation.kill();
+    gameUI?.winBanner.hide();
+    engine.clearWinHighlight();
+    replayPlayer.exit();
+    gameUI?.setReplayMode(false);
+    gameUI?.hideError();
+  }
+
+  async function openHistory(): Promise<void> {
+    if (!roundMachine.matches('idle') || replayPlayer.isActive()) {
+      return;
+    }
+
+    historyPanel.showLoading();
+    historyPanel.layout(window.innerWidth, window.innerHeight);
+
+    try {
+      const rounds = await historyService.listRecent();
+      if (!roundMachine.matches('idle') || replayPlayer.isActive()) {
+        historyPanel.hide();
+        return;
+      }
+      historyPanel.setRounds(rounds);
+      historyPanel.layout(window.innerWidth, window.innerHeight);
+    } catch (error) {
+      historyPanel.hide();
+      const message = error instanceof RoundHistoryError ? error.message : 'Не удалось загрузить историю';
+      gameUI?.showError(message);
+    }
+  }
+
+  async function startReplay(roundId: string): Promise<void> {
+    if (!roundMachine.matches('idle') || roundMachine.context.autoSpinActive || replayPlayer.isActive()) {
+      return;
+    }
+
+    try {
+      const round = await historyService.getRound(roundId);
+      if (!roundMachine.matches('idle') || roundMachine.context.autoSpinActive || replayPlayer.isActive()) {
+        return;
+      }
+
+      historyPanel.hide();
+      gameUI?.hideError();
+      winPresentation.kill();
+      engine.clearWinHighlight();
+      gameUI?.winBanner.hide();
+      gameUI?.setReplayMode(true);
+      await replayPlayer.play(round);
+    } catch (error) {
+      winPresentation.kill();
+      gameUI?.setReplayMode(false);
+      const message = error instanceof RoundHistoryError ? error.message : 'Replay failed';
+      gameUI?.showError(message);
+    }
+  }
+
+  replayPlayer.on('replay:step', () => {
+    winPresentation.kill();
+    gameUI?.winBanner.hide();
+    engine.clearWinHighlight();
+  });
 
   let balance = INITIAL_BALANCE;
   let totalWin = INITIAL_TOTAL_WIN;
@@ -140,7 +248,7 @@ async function bootstrap(): Promise<void> {
   };
 
   const sourceSwitch: SpinSourceSwitch = {
-    canSwitch: () => roundMachine.matches('idle') && !sourceSwitchInFlight,
+    canSwitch: () => roundMachine.matches('idle') && !sourceSwitchInFlight && !replayPlayer.isActive(),
     onToggle: () => {
       void handleSourceToggle();
     },
@@ -177,7 +285,9 @@ async function bootstrap(): Promise<void> {
     }
   };
 
-  const practicePanel = new PracticePanel(spinService, sourceSwitch);
+  const practicePanel = new PracticePanel(spinService, sourceSwitch, () => {
+    void openHistory();
+  });
   practicePanel.position.set(12, 12);
   practicePanel.visible = false;
   app.stage.addChild(practicePanel);
@@ -192,6 +302,10 @@ async function bootstrap(): Promise<void> {
   };
 
   const handleAutoSpinToggle = (): void => {
+    if (replayPlayer.isActive()) {
+      return;
+    }
+
     if (roundMachine.context.autoSpinActive) {
       cancelAutoSpin();
       return;
@@ -203,7 +317,7 @@ async function bootstrap(): Promise<void> {
   };
 
   const handleSpin = (): void => {
-    if (!roundMachine.matches('idle') || !gameUI) return;
+    if (!roundMachine.matches('idle') || !gameUI || replayPlayer.isActive()) return;
     soundService.unlockFromGesture();
     
     const bet = gameUI.currentBet;
@@ -217,6 +331,7 @@ async function bootstrap(): Promise<void> {
   roundMachine.on('state:changed', ({ from, to, context }) => {
     switch (to) {
       case 'debiting':
+        historyPanel.hide();
         void soundService.ensureUnlocked();
         practicePanel.clearArmedVisuals();
         if (gameUI && 'clearDemoPanelArmedVisuals' in gameUI) {
@@ -247,27 +362,21 @@ async function bootstrap(): Promise<void> {
         break;
 
       case 'presenting_win':
-        if (context.response) {
+        if (context.response && gameUI) {
           const { winAmount, winningCells } = context.response;
-          engine.showWinHighlight(winningCells);
-          gameUI?.winBanner.prepareShow(winAmount);
+          totalWin = context.response.totalWin ?? totalWin + winAmount;
+          gameUI.setTotalWin(totalWin, true);
 
-          winPresentation.play({
-            highlighted: engine.getHighlightedCells(),
-            dimmed: engine.getDimmedCells(),
-            overlay: engine.getWinLineOverlay(),
-            banner: gameUI!.winBanner,
+          void presentWin({
+            engine,
+            winPresentation,
+            banner: gameUI.winBanner,
             amount: winAmount,
+            winningCells,
             gameRoot,
             soundService,
             alienCharacter: alienCharacter ?? undefined,
-          });
-
-          soundService.playWin();
-          totalWin = context.response.totalWin ?? totalWin + winAmount;
-          gameUI?.setTotalWin(totalWin, true);
-
-          void winPresentation.waitForIntro().then(() => {
+          }).then(() => {
             const pauseMs = roundMachine.context.autoSpinActive ? AUTO_SPIN_WIN_PAUSE_MS : 0;
             window.setTimeout(() => {
               roundMachine.dispatch({ type: 'WIN_INTRO_DONE' });
@@ -349,6 +458,10 @@ async function bootstrap(): Promise<void> {
         soundService,
         spinService,
         sourceSwitch,
+        exitReplay,
+        () => {
+          void openHistory();
+        },
       );
       gameUI.zIndex = 3;
       gameRoot.addChild(gameUI);
@@ -360,6 +473,7 @@ async function bootstrap(): Promise<void> {
       balance = previousState?.balance ?? balance;
       totalWin = previousState?.totalWin ?? totalWin;
       currentBet = previousState?.bet ?? currentBet;
+      gameUI.setReplayMode(replayPlayer.isActive());
       syncSourceUi();
     }
 
@@ -405,6 +519,7 @@ async function bootstrap(): Promise<void> {
     const profileChanged = layoutManager.refreshProfile();
     layoutScene(profileChanged);
     layoutSoundControls();
+    historyPanel.layout(window.innerWidth, window.innerHeight);
     if (atlasDebugPanel.visible) {
       atlasDebugPanel.layout(window.innerWidth, window.innerHeight);
     }

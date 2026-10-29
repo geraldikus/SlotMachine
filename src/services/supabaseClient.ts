@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { CellPosition, ResultMatrix } from '../config/types';
+import { RoundStep } from '../round/types';
 
 export interface RemoteSpinResult {
   matrix: ResultMatrix;
@@ -7,6 +8,11 @@ export interface RemoteSpinResult {
   winningCells: CellPosition[];
   balance?: number;
   totalWin?: number;
+  roundId?: string;
+  seed?: string;
+  steps?: RoundStep[];
+  gameVersion?: string;
+  mathVersion?: string;
 }
 
 export interface RemoteProfile {
@@ -95,6 +101,11 @@ export async function invokeSupabaseSpin(bet: number): Promise<RemoteSpinResult>
     winningCells?: CellPosition[];
     balance?: number;
     totalWin?: number;
+    roundId?: string;
+    seed?: string;
+    steps?: RoundStep[];
+    gameVersion?: string;
+    mathVersion?: string;
   } | null;
 
   if (!payload || payload.error || !payload.matrix || payload.winAmount === undefined) {
@@ -107,6 +118,11 @@ export async function invokeSupabaseSpin(bet: number): Promise<RemoteSpinResult>
     winningCells: payload.winningCells ?? [],
     balance: payload.balance === undefined ? undefined : Number(payload.balance),
     totalWin: payload.totalWin === undefined ? undefined : Number(payload.totalWin),
+    ...(payload.roundId ? { roundId: payload.roundId } : {}),
+    ...(payload.seed ? { seed: payload.seed } : {}),
+    ...(Array.isArray(payload.steps) ? { steps: payload.steps } : {}),
+    ...(payload.gameVersion ? { gameVersion: payload.gameVersion } : {}),
+    ...(payload.mathVersion ? { mathVersion: payload.mathVersion } : {}),
   };
 }
 

@@ -1,5 +1,6 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { SymbolTextureMap } from '../assets/loadSymbols';
+import { hashSeed, mulberry32 } from '../logic/rng';
 import { Reel } from './Reel';
 import { SymbolCell } from './SymbolCell';
 import { WinLineOverlay } from './WinLineOverlay';
@@ -114,14 +115,18 @@ export class SlotEngine extends Container {
     return matrix;
   }
 
-  startSpin(): void {
+  startSpin(seed?: string): void {
     if (this.state !== 'IDLE') return;
 
     this.clearWinHighlight();
     this.pendingMatrix = null;
     this.state = 'SPINNING';
     this.stoppedReelCount = 0;
-    this.reels.forEach((reel) => reel.startSpin());
+    this.reels.forEach((reel, index) => {
+      const rng = seed ? mulberry32(hashSeed(`${seed}:${index}`)) : Math.random;
+      reel.setRng(rng);
+      reel.startSpin();
+    });
   }
 
   stopWithMatrix(matrix: ResultMatrix): void {

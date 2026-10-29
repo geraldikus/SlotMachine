@@ -6,11 +6,16 @@ export class PracticePanel extends Container {
   private readonly slowBtn: DemoButton;
   private readonly errorBtn: DemoButton;
   private readonly sourceBtn: DemoButton;
+  private readonly historyBtn: DemoButton;
   private readonly spinService: SpinService;
   private readonly sourceSwitch: SpinSourceSwitch;
   private armedMode: SpinMockMode | null = null;
 
-  constructor(spinService: SpinService, sourceSwitch: SpinSourceSwitch) {
+  constructor(
+    spinService: SpinService,
+    sourceSwitch: SpinSourceSwitch,
+    onOpenHistory: () => void,
+  ) {
     super();
     this.spinService = spinService;
     this.sourceSwitch = sourceSwitch;
@@ -42,6 +47,12 @@ export class PracticePanel extends Container {
     this.errorBtn = new DemoButton('Error next', buttonWidth, buttonHeight, () => this.toggleMode('error'));
     this.errorBtn.position.set(padding, y);
     this.addChild(this.errorBtn);
+
+    y += buttonHeight + gap;
+
+    this.historyBtn = new DemoButton('History', buttonWidth, buttonHeight, onOpenHistory);
+    this.historyBtn.position.set(padding, y);
+    this.addChild(this.historyBtn);
 
     this.syncFromService();
   }
