@@ -45,10 +45,35 @@ export class WinLineOverlay extends Container {
     return this.dotContainers;
   }
 
-  show(cells: CellPosition[]): void {
-    const points = sortCellsForLine(cells).map(({ row, col }) => getCellCenter(col, row));
-    this.drawGeometry(points);
-    this.visible = true;
+  show(lines: CellPosition[][]): void {
+    this.clearGeometry();
+
+    const seen = new Set<string>();
+    for (const line of lines) {
+      const ordered = sortCellsForLine(line);
+      const points = ordered.map(({ row, col }) => getCellCenter(col, row));
+      this.drawPolyline(this.glowLine, points, {
+        color: GLOW_COLOR,
+        width: MAIN_LINE_WIDTH + GLOW_EXTRA_WIDTH,
+        alpha: 1,
+      });
+      this.drawPolyline(this.mainLine, points, {
+        color: LINE_COLOR,
+        width: MAIN_LINE_WIDTH,
+        alpha: 1,
+      });
+
+      ordered.forEach((cell, index) => {
+        const key = `${cell.row},${cell.col}`;
+        if (seen.has(key)) {
+          return;
+        }
+        seen.add(key);
+        this.addDot(points[index]);
+      });
+    }
+
+    this.visible = lines.some((line) => line.length > 0);
   }
 
   hide(): void {
@@ -65,47 +90,34 @@ export class WinLineOverlay extends Container {
     this.glowLine.alpha = 1;
   }
 
-  private drawGeometry(points: { x: number; y: number }[]): void {
+  private clearGeometry(): void {
     this.glowLine.clear();
     this.mainLine.clear();
-    
-    // Clear old dots
+
     for (const dot of this.dotContainers) {
       this.removeChild(dot);
       dot.destroy({ children: true });
     }
     this.dotContainers.length = 0;
+  }
 
-    this.drawPolyline(this.glowLine, points, {
-      color: GLOW_COLOR,
-      width: MAIN_LINE_WIDTH + GLOW_EXTRA_WIDTH,
-      alpha: 1,
-    });
+  private addDot(point: { x: number; y: number }): void {
+    const dotContainer = new Container();
+    dotContainer.position.set(point.x, point.y);
 
-    this.drawPolyline(this.mainLine, points, {
-      color: LINE_COLOR,
-      width: MAIN_LINE_WIDTH,
-      alpha: 1,
-    });
+    const dotGlow = new Graphics();
+    dotGlow.circle(0, 0, DOT_RADIUS + DOT_GLOW_PADDING);
+    dotGlow.fill({ color: GLOW_COLOR, alpha: 1 });
 
-    for (const point of points) {
-      const dotContainer = new Container();
-      dotContainer.position.set(point.x, point.y);
-      
-      const dotGlow = new Graphics();
-      dotGlow.circle(0, 0, DOT_RADIUS + DOT_GLOW_PADDING);
-      dotGlow.fill({ color: GLOW_COLOR, alpha: 1 });
-      
-      const dotCore = new Graphics();
-      dotCore.circle(0, 0, DOT_RADIUS);
-      dotCore.fill({ color: LINE_COLOR, alpha: 1 });
-      
-      dotContainer.addChild(dotGlow);
-      dotContainer.addChild(dotCore);
-      
-      this.dotContainers.push(dotContainer);
-      this.addChild(dotContainer);
-    }
+    const dotCore = new Graphics();
+    dotCore.circle(0, 0, DOT_RADIUS);
+    dotCore.fill({ color: LINE_COLOR, alpha: 1 });
+
+    dotContainer.addChild(dotGlow);
+    dotContainer.addChild(dotCore);
+
+    this.dotContainers.push(dotContainer);
+    this.addChild(dotContainer);
   }
 
   private drawPolyline(
@@ -121,11 +133,7 @@ export class WinLineOverlay extends Container {
       return;
     }
 
-    graphics.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i += 1) {
-      graphics.lineTo(points[i].x, points[i].y);
-    }
-
+    graphics.poly(points.flatMap((point) => [point.x, point.y]), false);
     graphics.stroke({
       color: style.color,
       width: style.width,

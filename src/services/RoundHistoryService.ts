@@ -1,4 +1,4 @@
-import { RoundRecord, RoundStep, SUPPORTED_REPLAY_VERSIONS } from '../round/types';
+import { RoundRecord, RoundStep, SUPPORTED_MATH_VERSIONS, SUPPORTED_REPLAY_VERSIONS } from '../round/types';
 import { SpinSource } from './SpinService';
 import { InMemoryRoundHistory } from './InMemoryRoundHistory';
 import { ensureAnonymousSession, getSupabaseClient } from './supabaseClient';
@@ -78,7 +78,7 @@ export class RoundHistoryService {
       throw new RoundHistoryError('ROUND_NOT_FOUND', 'Раунд не найден или истёк');
     }
 
-    if (!SUPPORTED_REPLAY_VERSIONS.includes(round.gameVersion)) {
+    if (!SUPPORTED_REPLAY_VERSIONS.includes(round.gameVersion) || !isReplayableRound(round)) {
       throw new RoundHistoryError('UNSUPPORTED_VERSION', 'Replay недоступен для этой версии игры');
     }
 
@@ -139,7 +139,13 @@ function parseSteps(value: unknown): RoundStep[] {
     return [];
   }
 
-  return value.filter(isBaseStep);
+  return value.filter(isBaseStep).map((step) => ({
+    type: 'base' as const,
+    stops: Array.isArray(step.stops) ? step.stops.filter((stop) => typeof stop === 'number') : [],
+    matrix: step.matrix,
+    winningCells: step.winningCells,
+    win: step.win,
+  }));
 }
 
 function isBaseStep(value: unknown): value is RoundStep {
@@ -152,4 +158,9 @@ function isBaseStep(value: unknown): value is RoundStep {
     && Array.isArray(step.matrix)
     && Array.isArray(step.winningCells)
     && typeof step.win === 'number';
+}
+
+function isReplayableRound(round: RoundRecord): boolean {
+  return SUPPORTED_MATH_VERSIONS.includes(round.mathVersion)
+    && round.steps.every((step) => step.stops.length === 4 && step.stops.every((stop) => Number.isFinite(stop)));
 }

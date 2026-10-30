@@ -1,74 +1,32 @@
-import { Container, Graphics, Rectangle, Text } from 'pixi.js';
+import { Container } from 'pixi.js';
 import { LayoutProfile } from '../../layout/types';
-import { SpinMockMode, SpinService, SpinSourceSwitch } from '../../services/SpinService';
-import { DemoButton } from '../debug/DemoButton';
+import { SpinService, SpinSourceSwitch } from '../../services/SpinService';
+import { DemoPanel } from '../debug/DemoPanel';
 
 export class DemoPanelPopover extends Container {
-  private readonly spinService: SpinService;
-  private readonly sourceSwitch: SpinSourceSwitch;
-  private readonly sourceBtn: DemoButton;
-  private readonly slowBtn: DemoButton;
-  private readonly errorBtn: DemoButton;
-  private readonly historyBtn: DemoButton;
-  private armedMode: SpinMockMode | null = null;
-  private readonly padding = 12;
-  private readonly gap = 8;
+  private readonly panel: DemoPanel;
 
   constructor(
     spinService: SpinService,
     profile: LayoutProfile,
     sourceSwitch: SpinSourceSwitch,
     onOpenHistory: () => void,
+    onOpenPaytable: () => void,
   ) {
     super();
-    this.spinService = spinService;
-    this.sourceSwitch = sourceSwitch;
     this.visible = false;
-    this.eventMode = 'static';
+    this.panel = new DemoPanel(
+      profile.getPracticePanelButtonWidth(),
+      spinService,
+      sourceSwitch,
+      onOpenHistory,
+      onOpenPaytable,
+    );
+    this.addChild(this.panel);
+  }
 
-    const buttonWidth = profile.getPracticePanelButtonWidth();
-    const buttonHeight = 36;
-    const panelWidth = buttonWidth + this.padding * 2;
-    const panelHeight = this.padding * 2 + 14 + this.gap + buttonHeight * 4 + this.gap * 3;
-
-    this.hitArea = new Rectangle(0, 0, panelWidth, panelHeight);
-
-    const background = new Graphics();
-    background.roundRect(0, 0, panelWidth, panelHeight, 10).fill({ color: 0x2a2a4a, alpha: 0.96 });
-    background.stroke({ width: 1, color: 0x3a3a5a });
-    this.addChild(background);
-
-    let y = this.padding;
-
-    const title = new Text({ text: 'DEMO PANEL', style: { fill: 0xffffff, fontSize: 14 } });
-    title.position.set(this.padding, y);
-    this.addChild(title);
-
-    y += title.height + this.gap;
-
-    this.sourceBtn = new DemoButton('Supabase', buttonWidth, buttonHeight, () => this.toggleSource());
-    this.sourceBtn.position.set(this.padding, y);
-    this.addChild(this.sourceBtn);
-
-    y += buttonHeight + this.gap;
-
-    this.slowBtn = new DemoButton('Slow next', buttonWidth, buttonHeight, () => this.toggleMode('slow'));
-    this.slowBtn.position.set(this.padding, y);
-    this.addChild(this.slowBtn);
-
-    y += buttonHeight + this.gap;
-
-    this.errorBtn = new DemoButton('Error next', buttonWidth, buttonHeight, () => this.toggleMode('error'));
-    this.errorBtn.position.set(this.padding, y);
-    this.addChild(this.errorBtn);
-
-    y += buttonHeight + this.gap;
-
-    this.historyBtn = new DemoButton('History', buttonWidth, buttonHeight, onOpenHistory);
-    this.historyBtn.position.set(this.padding, y);
-    this.addChild(this.historyBtn);
-
-    this.syncFromService();
+  getWidth(): number {
+    return this.panel.panelWidth;
   }
 
   toggle(): void {
@@ -80,47 +38,10 @@ export class DemoPanelPopover extends Container {
   }
 
   clearArmedVisuals(): void {
-    this.armedMode = null;
-    this.updateButtonStates();
+    this.panel.clearArmedVisuals();
   }
 
   syncFromService(): void {
-    if (this.spinService.getSource() === 'supabase') {
-      this.armedMode = null;
-      this.spinService.disarmNextSpin();
-    }
-    this.updateButtonStates();
-  }
-
-  private toggleSource(): void {
-    if (!this.sourceSwitch.canSwitch()) {
-      return;
-    }
-    this.sourceSwitch.onToggle();
-  }
-
-  private toggleMode(mode: SpinMockMode): void {
-    if (this.spinService.getSource() !== 'mock') {
-      return;
-    }
-
-    if (this.armedMode === mode) {
-      this.spinService.disarmNextSpin();
-      this.armedMode = null;
-    } else {
-      this.spinService.armNextSpin(mode);
-      this.armedMode = mode;
-    }
-
-    this.updateButtonStates();
-  }
-
-  private updateButtonStates(): void {
-    const isMock = this.spinService.getSource() === 'mock';
-    this.sourceBtn.setActive(!isMock);
-    this.slowBtn.setEnabled(isMock);
-    this.errorBtn.setEnabled(isMock);
-    this.slowBtn.setActive(isMock && this.armedMode === 'slow');
-    this.errorBtn.setActive(isMock && this.armedMode === 'error');
+    this.panel.syncFromService();
   }
 }

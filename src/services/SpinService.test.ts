@@ -1,9 +1,12 @@
-import { calcWinAmount } from '../config/currency';
-import { findWinLine } from '../logic/win';
+import { evaluateWin, matrixFromStops } from '../../supabase/functions/_shared/slotMath';
 import { GAME_VERSION, MATH_VERSION } from '../round/types';
 import { SpinRequestError, SpinService } from './SpinService';
 
-const TEST_SYMBOLS = ['a', 'b', 'c', 'd', 'e', 'f'];
+const REMOTE_MATRIX = [
+  ['a', 'b', 'c', 'd'],
+  ['b', 'c', 'd', 'a'],
+  ['c', 'd', 'a', 'b'],
+];
 
 describe('SpinService', () => {
   beforeEach(() => {
@@ -16,7 +19,7 @@ describe('SpinService', () => {
   });
 
   it('emits spin:requested and spin:success for a normal spin', async () => {
-    const service = new SpinService(TEST_SYMBOLS);
+    const service = new SpinService();
     const requested: Array<{ requestId: string; bet: number }> = [];
     const succeeded: Array<{ requestId: string }> = [];
 
@@ -36,22 +39,24 @@ describe('SpinService', () => {
     expect(response.matrix[0]).toHaveLength(4);
   });
 
-  it('marks every third spin as winning', async () => {
-    const service = new SpinService(TEST_SYMBOLS);
-    const results: boolean[] = [];
+  it('pays the strip evaluation for the returned stops', async () => {
+    const service = new SpinService();
 
     for (let i = 0; i < 6; i += 1) {
       const promise = service.requestSpin(10);
       await vi.advanceTimersByTimeAsync(500);
       const response = await promise;
-      results.push(response.winAmount > 0);
-    }
+      const evaluated = evaluateWin(matrixFromStops(response.stops), 10);
 
-    expect(results).toEqual([false, false, true, false, false, true]);
+      expect(response.matrix).toEqual(matrixFromStops(response.stops));
+      expect(response.winAmount).toBe(evaluated.winAmount);
+      expect(response.winningCells).toEqual(evaluated.winningCells);
+      expect(response.lines).toEqual(evaluated.lines);
+    }
   });
 
   it('arms error mode for one spin', async () => {
-    const service = new SpinService(TEST_SYMBOLS);
+    const service = new SpinService();
     const errors: SpinRequestError[] = [];
     service.on('spin:error', (data) => errors.push(data.error));
 
@@ -69,7 +74,7 @@ describe('SpinService', () => {
   });
 
   it('uses slow delay when armed', async () => {
-    const service = new SpinService(TEST_SYMBOLS);
+    const service = new SpinService();
     service.armNextSpin('slow');
 
     let resolved = false;
@@ -85,38 +90,31 @@ describe('SpinService', () => {
     expect(resolved).toBe(true);
   });
 
-  it('keeps winAmount and winningCells consistent with matrix', async () => {
-    const service = new SpinService(TEST_SYMBOLS);
+  it('keeps winAmount and winningCells consistent with the strip window', async () => {
+    const service = new SpinService();
 
     for (let i = 0; i < 6; i += 1) {
       const promise = service.requestSpin(10);
       await vi.advanceTimersByTimeAsync(500);
       const response = await promise;
-      const winLine = findWinLine(response.matrix);
+      const evaluated = evaluateWin(matrixFromStops(response.stops), 10);
 
-      if (winLine) {
-        expect(response.winAmount).toBe(calcWinAmount(10));
-        expect(response.winningCells).toEqual(winLine.cells);
-      } else {
-        expect(response.winAmount).toBe(0);
-        expect(response.winningCells).toEqual([]);
-      }
+      expect(response.winAmount).toBe(evaluated.winAmount);
+      expect(response.winningCells).toEqual(evaluated.winningCells);
     }
   });
 
   it('does not generate a local matrix when source is supabase', async () => {
     const supabaseSpin = vi.fn(async () => ({
-      matrix: [
-        ['a', 'b', 'c', 'd'],
-        ['b', 'c', 'd', 'a'],
-        ['c', 'd', 'a', 'b'],
-      ],
+      matrix: REMOTE_MATRIX,
+      stops: [0, 1, 2, 3],
       winAmount: 30,
       winningCells: [{ row: 0, col: 0 }],
+      lines: [[{ row: 0, col: 0 }]],
       balance: 1020,
       totalWin: 30,
     }));
-    const service = new SpinService(TEST_SYMBOLS, supabaseSpin);
+    const service = new SpinService(supabaseSpin);
     service.setSource('supabase');
 
     const requested: Array<{ requestId: string; bet: number }> = [];
@@ -129,13 +127,11 @@ describe('SpinService', () => {
     expect(requested).toHaveLength(1);
     expect(supabaseSpin).toHaveBeenCalledWith(10);
     expect(response).toEqual({
-      matrix: [
-        ['a', 'b', 'c', 'd'],
-        ['b', 'c', 'd', 'a'],
-        ['c', 'd', 'a', 'b'],
-      ],
+      matrix: REMOTE_MATRIX,
+      stops: [0, 1, 2, 3],
       winAmount: 30,
       winningCells: [{ row: 0, col: 0 }],
+      lines: [[{ row: 0, col: 0 }]],
       balance: 1020,
       totalWin: 30,
     });
@@ -143,15 +139,13 @@ describe('SpinService', () => {
 
   it('ignores armed mock modes in supabase source', async () => {
     const supabaseSpin = vi.fn(async () => ({
-      matrix: [
-        ['a', 'b', 'c', 'd'],
-        ['b', 'c', 'd', 'a'],
-        ['c', 'd', 'a', 'b'],
-      ],
+      matrix: REMOTE_MATRIX,
+      stops: [0, 0, 0, 0],
       winAmount: 0,
       winningCells: [],
+      lines: [],
     }));
-    const service = new SpinService(TEST_SYMBOLS, supabaseSpin);
+    const service = new SpinService(supabaseSpin);
     service.setSource('supabase');
     service.armNextSpin('error');
 
@@ -162,7 +156,7 @@ describe('SpinService', () => {
   });
 
   it('returns round metadata and stores the mock round', async () => {
-    const service = new SpinService(TEST_SYMBOLS);
+    const service = new SpinService();
 
     const promise = service.requestSpin(10);
     await vi.advanceTimersByTimeAsync(500);
@@ -175,6 +169,7 @@ describe('SpinService', () => {
     expect(response.steps).toEqual([
       {
         type: 'base',
+        stops: response.stops,
         matrix: response.matrix,
         winningCells: response.winningCells,
         win: response.winAmount,
@@ -192,7 +187,7 @@ describe('SpinService', () => {
   });
 
   it('does not store a failed mock spin', async () => {
-    const service = new SpinService(TEST_SYMBOLS);
+    const service = new SpinService();
     service.armNextSpin('error');
 
     const promise = service.requestSpin(10);
@@ -204,7 +199,7 @@ describe('SpinService', () => {
   });
 
   it('generates unique requestIds across spins', async () => {
-    const service = new SpinService(TEST_SYMBOLS);
+    const service = new SpinService();
     const ids: string[] = [];
     service.on('spin:requested', (data) => ids.push(data.requestId));
 

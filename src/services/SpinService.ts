@@ -1,17 +1,17 @@
 import { EventEmitter } from 'eventemitter3';
-import { calcWinAmount } from '../config/currency';
-import { SYMBOLS } from '../config/symbols';
-import { CellPosition, ResultMatrix, SymbolKey } from '../config/types';
+import { CellPosition, ResultMatrix } from '../config/types';
 import { createRoundSeed } from '../logic/rng';
-import { findWinLine, generateLosingMatrix, generateWinningMatrix } from '../logic/win';
-import { GAME_VERSION, MATH_VERSION, RoundStep } from '../round/types';
+import { evaluateWin, MATH_VERSION, matrixFromStops, randomStops } from '../../supabase/functions/_shared/slotMath';
+import { GAME_VERSION, RoundStep } from '../round/types';
 import { InMemoryRoundHistory } from './InMemoryRoundHistory';
 import { invokeSupabaseSpin } from './supabaseClient';
 
 export interface SpinResponse {
   matrix: ResultMatrix;
+  stops: number[];
   winAmount: number;
   winningCells: CellPosition[];
+  lines: CellPosition[][];
   balance?: number;
   totalWin?: number;
   roundId?: string;
@@ -76,13 +76,11 @@ function delay(ms: number): Promise<void> {
 }
 
 export class SpinService extends EventEmitter<SpinServiceEvents> {
-  private spinCount = 0;
   private nextMockMode: SpinMockMode | null = null;
   private requestCounter = 0;
   private source: SpinSource = 'mock';
 
   constructor(
-    private readonly symbols: SymbolKey[] = SYMBOLS,
     private readonly supabaseSpin: SupabaseSpinInvoker = invokeSupabaseSpin,
     private readonly mockHistory = new InMemoryRoundHistory(),
   ) {
@@ -161,21 +159,16 @@ export class SpinService extends EventEmitter<SpinServiceEvents> {
 
     await delay(delayMs);
 
-    this.spinCount += 1;
-    const isWinSpin = this.spinCount % 3 === 0;
-
-    const matrix = isWinSpin
-      ? generateWinningMatrix(this.symbols).matrix
-      : generateLosingMatrix(this.symbols);
-
-    const winLine = findWinLine(matrix);
-    const winAmount = winLine ? calcWinAmount(bet) : 0;
+    const stops = randomStops();
+    const matrix = matrixFromStops(stops) as ResultMatrix;
+    const evaluated = evaluateWin(matrix, bet);
     const steps: RoundStep[] = [
       {
         type: 'base',
+        stops,
         matrix,
-        winningCells: winLine?.cells ?? [],
-        win: winAmount,
+        winningCells: evaluated.winningCells,
+        win: evaluated.winAmount,
       },
     ];
     const roundId = crypto.randomUUID();
@@ -189,14 +182,16 @@ export class SpinService extends EventEmitter<SpinServiceEvents> {
       mathVersion: MATH_VERSION,
       seed,
       bet,
-      totalWin: winAmount,
+      totalWin: evaluated.winAmount,
       steps,
     });
 
     return {
       matrix,
-      winAmount,
-      winningCells: winLine?.cells ?? [],
+      stops,
+      winAmount: evaluated.winAmount,
+      winningCells: evaluated.winningCells,
+      lines: evaluated.lines,
       roundId,
       seed,
       steps,

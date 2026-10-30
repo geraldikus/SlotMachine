@@ -1,19 +1,12 @@
 import { SlotEngine } from '../engine/SlotEngine';
 import { SpinRequestError, SpinResponse, SpinService } from '../services/SpinService';
 import { ResultMatrix } from '../config/types';
+import { matrixFromStops } from '../../supabase/functions/_shared/slotMath';
 import { GameRoundMachine } from './GameRoundMachine';
 
-const PREVIOUS_MATRIX: ResultMatrix = [
-  ['strawberry', 'red-cherry', 'raspberry', 'black-cherry'],
-  ['raspberry', 'black-cherry', 'strawberry', 'red-cherry'],
-  ['black-berry-dark', 'strawberry', 'red-cherry', 'raspberry'],
-];
-
-const NO_WIN_RESPONSE_MATRIX: ResultMatrix = [
-  ['strawberry', 'red-cherry', 'raspberry', 'black-cherry'],
-  ['black-cherry', 'strawberry', 'red-cherry', 'raspberry'],
-  ['raspberry', 'black-berry-dark', 'black-cherry', 'strawberry'],
-];
+const PREVIOUS_STOPS = [1, 1, 1, 1];
+const RESULT_STOPS = [0, 0, 0, 0];
+const RESULT_MATRIX = matrixFromStops(RESULT_STOPS) as ResultMatrix;
 
 function createHarness(requestId = 'spin_test_1') {
   const engineHandlers: Record<string, Array<() => void>> = {};
@@ -25,7 +18,8 @@ function createHarness(requestId = 'spin_test_1') {
       engineHandlers[event] = engineHandlers[event] ?? [];
       engineHandlers[event].push(handler);
     }),
-    getVisibleMatrix: vi.fn(() => PREVIOUS_MATRIX),
+    getVisibleMatrix: vi.fn(() => RESULT_MATRIX),
+    getStops: vi.fn(() => PREVIOUS_STOPS),
     forceIdle: vi.fn(),
     emitAllStopped: () => {
       engineHandlers.allStopped?.forEach((handler) => handler());
@@ -76,22 +70,26 @@ function createHarness(requestId = 'spin_test_1') {
 
 function startRound(machine: GameRoundMachine, bet = 10): void {
   machine.dispatch({ type: 'USER_SPIN', bet });
-  machine.dispatch({ type: 'BET_DEBITED', bet, previousMatrix: PREVIOUS_MATRIX });
+  machine.dispatch({ type: 'BET_DEBITED', bet, previousStops: PREVIOUS_STOPS });
 }
 
-function noWinResponse(matrix: ResultMatrix = NO_WIN_RESPONSE_MATRIX): SpinResponse {
+function noWinResponse(): SpinResponse {
   return {
-    matrix,
+    matrix: RESULT_MATRIX,
+    stops: RESULT_STOPS,
     winAmount: 0,
     winningCells: [],
+    lines: [],
   };
 }
 
 function winResponse(winAmount = 30): SpinResponse {
   return {
-    matrix: NO_WIN_RESPONSE_MATRIX,
+    matrix: RESULT_MATRIX,
+    stops: RESULT_STOPS,
     winAmount,
     winningCells: [{ row: 0, col: 0 }],
+    lines: [[{ row: 0, col: 0 }]],
   };
 }
 
@@ -298,7 +296,7 @@ describe('GameRoundMachine', () => {
       expect(machine.state).toBe('idle');
       expect(machine.context.balance).toBe(100);
       expect(balanceChanges).toContainEqual({ balance: 100, reason: 'refund' });
-      expect(engine.forceIdle).toHaveBeenCalledWith(PREVIOUS_MATRIX);
+      expect(engine.forceIdle).toHaveBeenCalledWith(PREVIOUS_STOPS);
     });
   });
 

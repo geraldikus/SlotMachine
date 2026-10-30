@@ -8,16 +8,18 @@ const MATRIX = [
   ['c', 'd', 'a', 'b'],
 ];
 
-function round(id: string, gameVersion = '1.0.0'): RoundRecord {
+const STOPS = [0, 1, 2, 3];
+
+function round(id: string, gameVersion = '1.0.0', mathVersion = 'strips-v4'): RoundRecord {
   return {
     id,
     createdAt: '2026-10-29T09:00:00.000Z',
     gameVersion,
-    mathVersion: 'every-third-v1',
+    mathVersion,
     seed: 'abc',
     bet: 10,
     totalWin: 30,
-    steps: [{ type: 'base', matrix: MATRIX, winningCells: [{ row: 0, col: 0 }], win: 30 }],
+    steps: [{ type: 'base', stops: STOPS, matrix: MATRIX, winningCells: [{ row: 0, col: 0 }], win: 30 }],
   };
 }
 
@@ -27,20 +29,20 @@ describe('mapRoundRow', () => {
       id: 'round-1',
       created_at: '2026-10-29T09:00:00.000Z',
       game_version: '1.0.0',
-      math_version: 'every-third-v1',
+      math_version: 'strips-v4',
       seed: 'abc',
       bet: '10.5',
       total_win: '31.5',
-      steps: [{ type: 'base', matrix: MATRIX, winningCells: [], win: 31.5 }],
+      steps: [{ type: 'base', stops: STOPS, matrix: MATRIX, winningCells: [], win: 31.5 }],
     })).toEqual({
       id: 'round-1',
       createdAt: '2026-10-29T09:00:00.000Z',
       gameVersion: '1.0.0',
-      mathVersion: 'every-third-v1',
+      mathVersion: 'strips-v4',
       seed: 'abc',
       bet: 10.5,
       totalWin: 31.5,
-      steps: [{ type: 'base', matrix: MATRIX, winningCells: [], win: 31.5 }],
+      steps: [{ type: 'base', stops: STOPS, matrix: MATRIX, winningCells: [], win: 31.5 }],
     });
   });
 });
@@ -94,6 +96,20 @@ describe('RoundHistoryService', () => {
 
     await expect(service.getRound('old')).rejects.toBeInstanceOf(RoundHistoryError);
     await expect(service.getRound('old')).rejects.toMatchObject({
+      code: 'UNSUPPORTED_VERSION',
+      message: 'Replay недоступен для этой версии игры',
+    });
+  });
+
+  it('rejects a round recorded before strip stops', async () => {
+    const memory = new InMemoryRoundHistory();
+    memory.record(round('legacy', '1.0.0', 'every-third-v1'));
+    const service = new RoundHistoryService(() => 'mock', memory, {
+      list: vi.fn(),
+      get: vi.fn(),
+    });
+
+    await expect(service.getRound('legacy')).rejects.toMatchObject({
       code: 'UNSUPPORTED_VERSION',
       message: 'Replay недоступен для этой версии игры',
     });

@@ -14,7 +14,7 @@ export interface GameRoundContext {
   bet: number;
   balance: number;
   totalWin: number;
-  previousMatrix: ResultMatrix | null;
+  previousStops: number[] | null;
   currentRequestId: string | null;
   response: SpinResponse | null;
   error: SpinRequestError | null;
@@ -25,7 +25,7 @@ export interface GameRoundContext {
 
 export type RoundEvent =
   | { type: 'USER_SPIN'; bet: number }
-  | { type: 'BET_DEBITED'; bet: number; previousMatrix: ResultMatrix }
+  | { type: 'BET_DEBITED'; bet: number; previousStops: number[] }
   | { type: 'NETWORK_RESPONSE'; requestId: string; response: SpinResponse }
   | { type: 'NETWORK_ERROR'; requestId: string; error: SpinRequestError }
   | { type: 'MIN_SPIN_ELAPSED' }

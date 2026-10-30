@@ -35,6 +35,7 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
     sourceSwitch: SpinSourceSwitch,
     onExitReplay: () => void,
     onOpenHistory: () => void,
+    onOpenPaytable: () => void,
   ) {
     const headerButtonsWidth = 44 * 2 + 8;
     const leftOffset = headerButtonsWidth + 8;
@@ -56,8 +57,11 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
     this.demoPopover = new DemoPanelPopover(spinService, profile, sourceSwitch, () => {
       this.demoPopover.close();
       onOpenHistory();
+    }, () => {
+      this.demoPopover.close();
+      onOpenPaytable();
     });
-    const popoverX = profile.designWidth - profile.padding - (profile.getPracticePanelButtonWidth() + 24);
+    const popoverX = profile.designWidth - profile.padding - this.demoPopover.getWidth();
     this.demoPopover.position.set(popoverX, profile.padding + 56 + 12);
     this.demoPopover.zIndex = 10;
     this.addChild(this.demoPopover);

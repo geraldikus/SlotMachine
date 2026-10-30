@@ -4,8 +4,10 @@ import { RoundStep } from '../round/types';
 
 export interface RemoteSpinResult {
   matrix: ResultMatrix;
+  stops: number[];
   winAmount: number;
   winningCells: CellPosition[];
+  lines: CellPosition[][];
   balance?: number;
   totalWin?: number;
   roundId?: string;
@@ -97,8 +99,10 @@ export async function invokeSupabaseSpin(bet: number): Promise<RemoteSpinResult>
   const payload = data as {
     error?: string;
     matrix?: ResultMatrix;
+    stops?: number[];
     winAmount?: number;
     winningCells?: CellPosition[];
+    lines?: CellPosition[][];
     balance?: number;
     totalWin?: number;
     roundId?: string;
@@ -108,14 +112,16 @@ export async function invokeSupabaseSpin(bet: number): Promise<RemoteSpinResult>
     mathVersion?: string;
   } | null;
 
-  if (!payload || payload.error || !payload.matrix || payload.winAmount === undefined) {
+  if (!payload || payload.error || !payload.matrix || payload.winAmount === undefined || !isStopList(payload.stops)) {
     throw new Error(payload?.error ?? 'Invalid spin response');
   }
 
   return {
     matrix: payload.matrix,
+    stops: payload.stops,
     winAmount: Number(payload.winAmount),
     winningCells: payload.winningCells ?? [],
+    lines: payload.lines ?? [],
     balance: payload.balance === undefined ? undefined : Number(payload.balance),
     totalWin: payload.totalWin === undefined ? undefined : Number(payload.totalWin),
     ...(payload.roundId ? { roundId: payload.roundId } : {}),
@@ -130,4 +136,10 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
   });
+}
+
+function isStopList(stops: number[] | undefined): stops is number[] {
+  return Array.isArray(stops)
+    && stops.length === 4
+    && stops.every((stop) => typeof stop === 'number' && Number.isFinite(stop));
 }

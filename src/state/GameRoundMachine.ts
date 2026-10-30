@@ -1,4 +1,6 @@
 import { EventEmitter } from 'eventemitter3';
+import { matrixFromStops } from '../../supabase/functions/_shared/slotMath';
+import { ResultMatrix } from '../config/types';
 import { SlotEngine } from '../engine/SlotEngine';
 import { SpinService } from '../services/SpinService';
 import {
@@ -34,7 +36,7 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
       bet: 0,
       balance: 0,
       totalWin: 0,
-      previousMatrix: null,
+      previousStops: null,
       currentRequestId: null,
       response: null,
       error: null,
@@ -149,7 +151,7 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
   private handleDebitingState(event: RoundEvent): void {
     if (event.type === 'BET_DEBITED') {
       this._context.bet = event.bet;
-      this._context.previousMatrix = event.previousMatrix;
+      this._context.previousStops = event.previousStops;
       this._context.balance -= event.bet;
       this._context.minSpinElapsed = false;
       this._context.networkResponseReceived = false;
@@ -190,9 +192,8 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
           this.clearMinSpinTimer();
           this._context.balance += this._context.bet;
           this.emit('balance:changed', { balance: this._context.balance, reason: 'refund' });
-          const rollbackMatrix =
-            this._context.previousMatrix ?? this.engine.getVisibleMatrix();
-          this.emit('effect', { type: 'stop_reels', data: { matrix: rollbackMatrix } });
+          const rollbackStops = this._context.previousStops ?? this.engine.getStops();
+          this.emit('effect', { type: 'stop_reels', data: { stops: rollbackStops } });
           this.transition('stopping');
         }
         break;
@@ -206,6 +207,7 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
 
   private handleStoppingState(event: RoundEvent): void {
     if (event.type === 'REELS_STOPPED') {
+      this.verifyStoppedMatrix(event.matrix);
       if (this._context.error) {
         this.transition('error');
         return;
@@ -243,7 +245,7 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
 
       // Сбрасываем контекст
       this._context.bet = 0;
-      this._context.previousMatrix = null;
+      this._context.previousStops = null;
       this._context.currentRequestId = null;
       this._context.response = null;
       this._context.error = null;
@@ -259,7 +261,7 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
     }
 
     this._context.bet = 0;
-    this._context.previousMatrix = null;
+    this._context.previousStops = null;
     this._context.currentRequestId = null;
     this._context.response = null;
     this._context.error = null;
@@ -288,12 +290,12 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
     }
 
     // Форсируем остановку движка
-    const matrix = this._context.previousMatrix ?? this.engine.getVisibleMatrix();
-    this.engine.forceIdle(matrix);
+    const stops = this._context.previousStops ?? this.engine.getStops();
+    this.engine.forceIdle(stops);
 
     // Очищаем контекст
     this._context.bet = 0;
-    this._context.previousMatrix = null;
+    this._context.previousStops = null;
     this._context.response = null;
     this._context.error = null;
     this._context.minSpinElapsed = false;
@@ -305,8 +307,23 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
 
   private checkReadyToStop(): void {
     if (this._context.networkResponseReceived && this._context.minSpinElapsed && this._context.response) {
-      this.emit('effect', { type: 'stop_reels', data: { matrix: this._context.response.matrix } });
+      this.emit('effect', { type: 'stop_reels', data: { stops: this._context.response.stops } });
       this.transition('stopping');
+    }
+  }
+
+  private verifyStoppedMatrix(matrix: ResultMatrix): void {
+    const stops = this._context.response?.stops;
+    if (!stops) {
+      return;
+    }
+
+    const expected = matrixFromStops(stops);
+    const matches = matrix.every((row, rowIndex) =>
+      row.every((symbol, colIndex) => symbol === expected[rowIndex][colIndex]),
+    );
+    if (!matches) {
+      console.error('Visible matrix does not match stops', { matrix, expected, stops });
     }
   }
 

@@ -1,15 +1,14 @@
 import { EventEmitter } from 'eventemitter3';
-import { ResultMatrix } from '../config/types';
 import { RoundRecord, RoundStep } from '../round/types';
 
 export type ReplayState = 'idle' | 'playing' | 'presenting' | 'done';
 
 export interface ReplayEngine {
-  getVisibleMatrix(): ResultMatrix;
+  getStops(): number[];
   startSpin(seed?: string): void;
-  stopWithMatrix(matrix: ResultMatrix): void;
+  stopWithStops(stops: number[]): void;
   waitUntilIdle(): Promise<void>;
-  forceIdle(matrix?: ResultMatrix): void;
+  forceIdle(stops?: number[]): void;
   clearWinHighlight(): void;
 }
 
@@ -29,7 +28,7 @@ export interface ReplayPlayerOptions {
 
 export class ReplayPlayer extends EventEmitter<ReplayPlayerEvents> {
   private state: ReplayState = 'idle';
-  private savedMatrix: ResultMatrix | null = null;
+  private savedStops: number[] | null = null;
   private generation = 0;
   private timer: number | null = null;
   private waitResolve: (() => void) | null = null;
@@ -53,7 +52,7 @@ export class ReplayPlayer extends EventEmitter<ReplayPlayerEvents> {
 
     const generation = this.generation + 1;
     this.generation = generation;
-    this.savedMatrix = cloneMatrix(this.options.engine.getVisibleMatrix());
+    this.savedStops = [...this.options.engine.getStops()];
     this.state = 'playing';
     this.emit('replay:started', round);
 
@@ -71,7 +70,7 @@ export class ReplayPlayer extends EventEmitter<ReplayPlayerEvents> {
           return;
         }
 
-        this.options.engine.stopWithMatrix(step.matrix);
+        this.options.engine.stopWithStops(step.stops);
         await this.options.engine.waitUntilIdle();
         if (!this.isCurrent(generation)) {
           return;
@@ -87,12 +86,12 @@ export class ReplayPlayer extends EventEmitter<ReplayPlayerEvents> {
         }
       }
     } catch (error) {
-      if (this.isCurrent(generation) && this.savedMatrix) {
+      if (this.isCurrent(generation) && this.savedStops) {
         this.options.engine.clearWinHighlight();
-        this.options.engine.forceIdle(this.savedMatrix);
+        this.options.engine.forceIdle(this.savedStops);
       }
       if (this.isCurrent(generation)) {
-        this.savedMatrix = null;
+        this.savedStops = null;
         this.state = 'idle';
       }
       throw error;
@@ -114,10 +113,10 @@ export class ReplayPlayer extends EventEmitter<ReplayPlayerEvents> {
     this.generation += 1;
     this.cancelWait();
     this.options.engine.clearWinHighlight();
-    if (this.savedMatrix) {
-      this.options.engine.forceIdle(this.savedMatrix);
+    if (this.savedStops) {
+      this.options.engine.forceIdle(this.savedStops);
     }
-    this.savedMatrix = null;
+    this.savedStops = null;
     this.state = 'idle';
   }
 
@@ -148,8 +147,4 @@ export class ReplayPlayer extends EventEmitter<ReplayPlayerEvents> {
     this.waitResolve?.();
     this.waitResolve = null;
   }
-}
-
-function cloneMatrix(matrix: ResultMatrix): ResultMatrix {
-  return matrix.map((row) => [...row]);
 }

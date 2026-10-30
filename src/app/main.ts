@@ -1,19 +1,20 @@
 import { Application, Container } from 'pixi.js';
 import { DEFAULT_BET, INITIAL_BALANCE, INITIAL_TOTAL_WIN } from '../config/currency';
-import { SYMBOLS } from '../config/symbols';
 import { loadSymbolTextures } from '../assets/loadSymbols';
 import { AlienCharacter, loadAlienAssets } from '../character';
-import { AppScreen } from '../config/types';
+import { AppScreen, CellPosition, ResultMatrix } from '../config/types';
 import { SlotEngine } from '../engine/SlotEngine';
 import { WinPresentation } from '../engine/WinPresentation';
 import { LayoutManager } from '../layout/LayoutManager';
 import { presentWin } from '../presentation/presentWin';
 import { ReplayPlayer } from '../replay/ReplayPlayer';
+import { evaluateWin } from '../../supabase/functions/_shared/slotMath';
 import { SoundService } from '../services/SoundService';
 import { RoundHistoryError, RoundHistoryService } from '../services/RoundHistoryService';
 import { SpinService, SpinSourceSwitch } from '../services/SpinService';
 import { connectSupabaseProfile } from '../services/supabaseClient';
 import { HistoryPanel } from '../ui/history/HistoryPanel';
+import { PaytablePanel } from '../ui/paytable/PaytablePanel';
 import { DesktopGameUI } from '../ui/desktop/DesktopGameUI';
 import { getSpritesheet, SpriteAtlasDebugPanel } from '../ui/debug/SpriteAtlasDebugPanel';
 import { IGameUI } from '../ui/IGameUI';
@@ -38,6 +39,7 @@ function createGameUI(
   sourceSwitch: SpinSourceSwitch,
   onExitReplay: () => void,
   onOpenHistory: () => void,
+  onOpenPaytable: () => void,
 ): IGameUI & Container {
   if (profile.id === 'desktop') {
     return new DesktopGameUI(profile, onSpin, onAutoSpin, onExitReplay);
@@ -51,6 +53,7 @@ function createGameUI(
     sourceSwitch,
     onExitReplay,
     onOpenHistory,
+    onOpenPaytable,
   );
 }
 
@@ -124,7 +127,7 @@ async function bootstrap(): Promise<void> {
   };
   layoutSoundControls();
 
-  const engine = new SlotEngine(SYMBOLS, symbolTextures);
+  const engine = new SlotEngine(symbolTextures);
   engine.zIndex = 1;
   gameRoot.addChild(engine);
   const winPresentation = new WinPresentation();
@@ -138,6 +141,9 @@ async function bootstrap(): Promise<void> {
     void startReplay(roundId);
   });
   app.stage.addChild(historyPanel);
+
+  const paytablePanel = new PaytablePanel(symbolTextures);
+  app.stage.addChild(paytablePanel);
 
   const replayPlayer = new ReplayPlayer({
     engine,
@@ -153,6 +159,7 @@ async function bootstrap(): Promise<void> {
         banner: gameUI.winBanner,
         amount: step.win,
         winningCells: step.winningCells,
+        lines: linesFor(step.matrix, step.winningCells),
         gameRoot,
         soundService,
         alienCharacter: alienCharacter ?? undefined,
@@ -204,6 +211,7 @@ async function bootstrap(): Promise<void> {
       }
 
       historyPanel.hide();
+      paytablePanel.hide();
       gameUI?.hideError();
       winPresentation.kill();
       engine.clearWinHighlight();
@@ -285,8 +293,21 @@ async function bootstrap(): Promise<void> {
     }
   };
 
+  async function openPaytable(): Promise<void> {
+    if (!roundMachine.matches('idle') || replayPlayer.isActive()) {
+      return;
+    }
+
+    historyPanel.hide();
+    paytablePanel.show(gameUI?.currentBet ?? currentBet);
+    paytablePanel.layout(window.innerWidth, window.innerHeight);
+  }
+
   const practicePanel = new PracticePanel(spinService, sourceSwitch, () => {
+    paytablePanel.hide();
     void openHistory();
+  }, () => {
+    void openPaytable();
   });
   practicePanel.position.set(12, 12);
   practicePanel.visible = false;
@@ -332,6 +353,7 @@ async function bootstrap(): Promise<void> {
     switch (to) {
       case 'debiting':
         historyPanel.hide();
+        paytablePanel.hide();
         void soundService.ensureUnlocked();
         practicePanel.clearArmedVisuals();
         if (gameUI && 'clearDemoPanelArmedVisuals' in gameUI) {
@@ -345,8 +367,8 @@ async function bootstrap(): Promise<void> {
         gameUI?.setBetSelectorEnabled(false);
         
         // Запускаем процесс debiting
-        const previousMatrix = engine.getVisibleMatrix();
-        roundMachine.dispatch({ type: 'BET_DEBITED', bet: context.bet, previousMatrix });
+        const previousStops = engine.getStops();
+        roundMachine.dispatch({ type: 'BET_DEBITED', bet: context.bet, previousStops });
         break;
 
       case 'error':
@@ -373,6 +395,9 @@ async function bootstrap(): Promise<void> {
             banner: gameUI.winBanner,
             amount: winAmount,
             winningCells,
+            lines: context.response.lines.length > 0
+              ? context.response.lines
+              : linesFor(context.response.matrix, winningCells),
             gameRoot,
             soundService,
             alienCharacter: alienCharacter ?? undefined,
@@ -420,8 +445,8 @@ async function bootstrap(): Promise<void> {
         engine.startSpin();
         break;
       case 'stop_reels':
-        if (data && data.matrix) {
-          engine.stopWithMatrix(data.matrix);
+        if (data?.stops) {
+          engine.stopWithStops(data.stops);
         }
         break;
     }
@@ -460,7 +485,11 @@ async function bootstrap(): Promise<void> {
         sourceSwitch,
         exitReplay,
         () => {
+          paytablePanel.hide();
           void openHistory();
+        },
+        () => {
+          void openPaytable();
         },
       );
       gameUI.zIndex = 3;
@@ -520,6 +549,7 @@ async function bootstrap(): Promise<void> {
     layoutScene(profileChanged);
     layoutSoundControls();
     historyPanel.layout(window.innerWidth, window.innerHeight);
+    paytablePanel.layout(window.innerWidth, window.innerHeight);
     if (atlasDebugPanel.visible) {
       atlasDebugPanel.layout(window.innerWidth, window.innerHeight);
     }
@@ -536,6 +566,14 @@ async function bootstrap(): Promise<void> {
     engine.update(ticker.deltaTime);
     gameUI?.update();
   });
+}
+
+function linesFor(matrix: ResultMatrix, winningCells: CellPosition[]): CellPosition[][] {
+  const lines = evaluateWin(matrix, 1).lines;
+  if (lines.length > 0) {
+    return lines;
+  }
+  return winningCells.length > 0 ? [winningCells] : [];
 }
 
 bootstrap().catch((error: unknown) => {

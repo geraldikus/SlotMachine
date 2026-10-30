@@ -1,6 +1,6 @@
 import { Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { SymbolTextureMap } from '../assets/loadSymbols';
-import { hashSeed, mulberry32 } from '../logic/rng';
+import { REEL_STRIPS, matrixFromStops } from '../../supabase/functions/_shared/slotMath';
 import { Reel } from './Reel';
 import { SymbolCell } from './SymbolCell';
 import { WinLineOverlay } from './WinLineOverlay';
@@ -14,10 +14,7 @@ import {
   REEL_WIDTH,
   ResultMatrix,
   SlotState,
-  SymbolKey,
 } from '../config/types';
-
-const DEFAULT_MIN_SPIN_MS = 2000;
 
 export class SlotEngine extends Container {
   private readonly reels: Reel[] = [];
@@ -28,11 +25,7 @@ export class SlotEngine extends Container {
   private dimmedCells: SymbolCell[] = [];
   private readonly winLineOverlay = new WinLineOverlay();
 
-  constructor(
-    symbolKeys: SymbolKey[],
-    textures: SymbolTextureMap,
-    initialMatrix?: ResultMatrix,
-  ) {
+  constructor(textures: SymbolTextureMap) {
     super();
 
     this.sortableChildren = true;
@@ -56,22 +49,8 @@ export class SlotEngine extends Container {
     maskedReels.addChild(reelsLayer);
     reelsLayer.setMask({ mask, channel: 'alpha', inverse: false });
 
-    const defaultMatrix: ResultMatrix = initialMatrix ?? [
-      [symbolKeys[0], symbolKeys[1], symbolKeys[2], symbolKeys[3]],
-      [symbolKeys[1], symbolKeys[2], symbolKeys[3], symbolKeys[4]],
-      [symbolKeys[2], symbolKeys[3], symbolKeys[4], symbolKeys[0]],
-    ];
-
     for (let column = 0; column < REEL_COUNT; column += 1) {
-      const initialColumn: SymbolKey[] = [
-        symbolKeys[(column + 2) % symbolKeys.length],
-        symbolKeys[(column + 1) % symbolKeys.length],
-        defaultMatrix[0][column],
-        defaultMatrix[1][column],
-        defaultMatrix[2][column],
-      ];
-
-      const reel = new Reel(symbolKeys, initialColumn, textures, column);
+      const reel = new Reel(REEL_STRIPS[column], 0, textures, column);
       reel.x = column * (REEL_WIDTH + REEL_SPACING);
       reel.on('stopped', () => this.onReelStopped());
       this.reels.push(reel);
@@ -115,25 +94,34 @@ export class SlotEngine extends Container {
     return matrix;
   }
 
-  startSpin(seed?: string): void {
+  getStops(): number[] {
+    return this.reels.map((reel) => reel.getStop());
+  }
+
+  startSpin(_seed?: string): void {
     if (this.state !== 'IDLE') return;
 
     this.clearWinHighlight();
     this.pendingMatrix = null;
     this.state = 'SPINNING';
     this.stoppedReelCount = 0;
-    this.reels.forEach((reel, index) => {
-      const rng = seed ? mulberry32(hashSeed(`${seed}:${index}`)) : Math.random;
-      reel.setRng(rng);
+    this.reels.forEach((reel) => {
       reel.startSpin();
     });
   }
 
-  stopWithMatrix(matrix: ResultMatrix): void {
+  stopWithStops(stops: number[]): void {
     if (this.state !== 'SPINNING') return;
 
-    this.pendingMatrix = matrix;
-    this.stop(matrix);
+    this.pendingMatrix = matrixFromStops(stops) as ResultMatrix;
+    this.state = 'STOPPING';
+    this.stoppedReelCount = 0;
+
+    this.reels.forEach((reel, index) => {
+      window.setTimeout(() => {
+        reel.stopSpin(stops[index] ?? 0);
+      }, index * CASCADE_DELAY_MS);
+    });
   }
 
   waitUntilIdle(): Promise<void> {
@@ -151,62 +139,26 @@ export class SlotEngine extends Container {
     });
   }
 
-  playRound(matrix: ResultMatrix, minSpinMs = DEFAULT_MIN_SPIN_MS): Promise<void> {
-    return new Promise((resolve) => {
-      const onComplete = (): void => {
-        this.off('allStopped', onComplete);
-        resolve();
-      };
-
-      this.on('allStopped', onComplete);
-      this.startSpin();
-
-      window.setTimeout(() => {
-        this.stopWithMatrix(matrix);
-      }, minSpinMs);
-    });
-  }
-
-  stop(matrix: ResultMatrix): void {
-    if (this.state !== 'SPINNING') return;
-
-    this.state = 'STOPPING';
-    this.stoppedReelCount = 0;
-
-    this.reels.forEach((reel, index) => {
-      window.setTimeout(() => {
-        const columnSymbols: SymbolKey[] = [
-          matrix[0][index],
-          matrix[1][index],
-          matrix[2][index],
-        ];
-        reel.stopSpin(columnSymbols);
-      }, index * CASCADE_DELAY_MS);
-    });
-  }
-
   update(deltaTime: number): void {
     this.reels.forEach((reel) => reel.update(deltaTime));
   }
 
-  forceIdle(matrix?: ResultMatrix): void {
+  forceIdle(stops?: number[]): void {
     this.state = 'IDLE';
     this.stoppedReelCount = REEL_COUNT;
 
     this.reels.forEach((reel, index) => {
-      const columnSymbols = matrix
-        ? ([matrix[0][index], matrix[1][index], matrix[2][index]] as SymbolKey[])
-        : undefined;
-      reel.forceIdle(columnSymbols);
+      reel.forceIdle(stops ? stops[index] : undefined);
     });
 
-    this.pendingMatrix = matrix ?? this.pendingMatrix;
+    this.pendingMatrix = stops ? matrixFromStops(stops) as ResultMatrix : this.pendingMatrix;
     this.emit('allStopped');
   }
 
-  showWinHighlight(cells: CellPosition[]): void {
+  showWinHighlight(lines: CellPosition[][]): void {
     this.clearWinHighlight();
 
+    const cells = lines.flat();
     const winningKeys = new Set(cells.map(({ row, col }) => `${row},${col}`));
 
     for (let col = 0; col < REEL_COUNT; col += 1) {
@@ -223,7 +175,7 @@ export class SlotEngine extends Container {
       }
     }
 
-    this.winLineOverlay.show(cells);
+    this.winLineOverlay.show(lines);
   }
 
   clearWinHighlight(): void {

@@ -12,6 +12,7 @@ export interface PresentWinInput {
   banner: WinBanner;
   amount: number;
   winningCells: CellPosition[];
+  lines: CellPosition[][];
   gameRoot: Container;
   soundService: SoundService;
   alienCharacter?: AlienCharacter;
@@ -19,7 +20,8 @@ export interface PresentWinInput {
 
 /** Shared win presentation for a live round and a replay. Does not touch the wallet. */
 export function presentWin(input: PresentWinInput): Promise<void> {
-  input.engine.showWinHighlight(input.winningCells);
+  const lines = input.lines.length > 0 ? input.lines : (input.winningCells.length > 0 ? [input.winningCells] : []);
+  input.engine.showWinHighlight(lines);
   input.banner.prepareShow(input.amount);
   input.winPresentation.play({
     highlighted: input.engine.getHighlightedCells(),

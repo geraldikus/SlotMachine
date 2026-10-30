@@ -97,13 +97,13 @@ begin
     raise exception 'INSUFFICIENT_FUNDS';
   end if;
 
-  update public.profiles
+  update public.profiles as p
   set
-    balance = balance - p_bet + p_win_amount,
-    total_win = total_win + p_win_amount,
-    spin_count = spin_count + 1
-  where id = p_user_id
-  returning profiles.balance, profiles.total_win
+    balance = p.balance - p_bet + p_win_amount,
+    total_win = p.total_win + p_win_amount,
+    spin_count = p.spin_count + 1
+  where p.id = p_user_id
+  returning p.balance, p.total_win
   into v_balance, v_total_win;
 
   insert into public.rounds (

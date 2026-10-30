@@ -1,48 +1,33 @@
-import { ResultMatrix } from '../config/types';
 import { RoundRecord, RoundStep } from '../round/types';
 import { ReplayEngine, ReplayPlayer } from './ReplayPlayer';
 
-const ORIGINAL: ResultMatrix = [
-  ['a', 'b', 'c', 'd'],
-  ['b', 'c', 'd', 'a'],
-  ['c', 'd', 'a', 'b'],
-];
-
-const FIRST: ResultMatrix = [
-  ['d', 'a', 'b', 'c'],
-  ['a', 'b', 'c', 'd'],
-  ['b', 'c', 'd', 'a'],
-];
-
-const SECOND: ResultMatrix = [
-  ['c', 'c', 'c', 'd'],
-  ['a', 'b', 'c', 'd'],
-  ['b', 'c', 'd', 'a'],
-];
+const ORIGINAL = [1, 1, 1, 1];
+const FIRST = [2, 2, 2, 2];
+const SECOND = [3, 3, 3, 3];
 
 function createEngine(): ReplayEngine & {
   calls: string[];
-  stopped: ResultMatrix[];
-  visible: () => ResultMatrix;
+  stopped: number[][];
+  visible: () => number[];
 } {
-  let matrix = ORIGINAL.map((row) => [...row]);
+  let stops = [...ORIGINAL];
   let idle = true;
   const calls: string[] = [];
-  const stopped: ResultMatrix[] = [];
+  const stopped: number[][] = [];
 
   return {
     calls,
     stopped,
-    visible: () => matrix.map((row) => [...row]),
-    getVisibleMatrix: () => matrix.map((row) => [...row]),
+    visible: () => [...stops],
+    getStops: () => [...stops],
     startSpin: (seed?: string) => {
       idle = false;
       calls.push(`start:${seed ?? ''}`);
     },
-    stopWithMatrix: (next: ResultMatrix) => {
+    stopWithStops: (next: number[]) => {
       idle = true;
-      matrix = next.map((row) => [...row]);
-      stopped.push(next.map((row) => [...row]));
+      stops = [...next];
+      stopped.push([...next]);
     },
     waitUntilIdle: () => {
       if (!idle) {
@@ -50,10 +35,10 @@ function createEngine(): ReplayEngine & {
       }
       return Promise.resolve();
     },
-    forceIdle: (next?: ResultMatrix) => {
+    forceIdle: (next?: number[]) => {
       idle = true;
       if (next) {
-        matrix = next.map((row) => [...row]);
+        stops = [...next];
       }
       calls.push('force');
     },
@@ -65,14 +50,14 @@ function createEngine(): ReplayEngine & {
 
 function createRound(): RoundRecord {
   const steps: RoundStep[] = [
-    { type: 'base', matrix: FIRST, winningCells: [], win: 0 },
-    { type: 'base', matrix: SECOND, winningCells: [{ row: 0, col: 0 }], win: 30 },
+    { type: 'base', stops: FIRST, matrix: [], winningCells: [], win: 0 },
+    { type: 'base', stops: SECOND, matrix: [], winningCells: [{ row: 0, col: 0 }], win: 30 },
   ];
   return {
     id: 'round-1',
     createdAt: '2026-10-29T09:00:00.000Z',
     gameVersion: '1.0.0',
-    mathVersion: 'every-third-v1',
+    mathVersion: 'strips-v4',
     seed: 'seed-1',
     bet: 10,
     totalWin: 30,
@@ -104,7 +89,7 @@ describe('ReplayPlayer', () => {
     expect(emit.mock.calls.map((call) => call[0])).not.toContain('balance:changed');
   });
 
-  it('restores the matrix captured before playback when exiting', async () => {
+  it('restores the stops captured before playback when exiting', async () => {
     const engine = createEngine();
     let releaseDelay: () => void = () => {};
     const player = new ReplayPlayer({

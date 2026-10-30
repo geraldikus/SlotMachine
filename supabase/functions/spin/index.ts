@@ -1,18 +1,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import { findWinLine, generateLosingMatrix, generateWinningMatrix } from './win.ts';
+import { evaluateWin, MATH_VERSION, matrixFromStops, randomStops } from '../_shared/slotMath.ts';
 
-const SYMBOLS = [
-  'strawberry',
-  'red-cherry',
-  'raspberry',
-  'black-cherry',
-  'black-berry-dark',
-  'black-berry-light',
-];
 const BET_OPTIONS = [1.5, 3, 5, 8, 10, 15, 20, 30, 50];
-const WIN_MULTIPLIER = 3;
 const GAME_VERSION = '1.0.0';
-const MATH_VERSION = 'every-third-v1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -66,16 +56,16 @@ Deno.serve(async (req) => {
       return json({ error: 'INSUFFICIENT_FUNDS' }, 400);
     }
 
-    const nextCount = Number(profile.spin_count) + 1;
-    const isWin = nextCount % 3 === 0;
-    const matrix = isWin ? generateWinningMatrix(SYMBOLS).matrix : generateLosingMatrix(SYMBOLS);
-    const winLine = findWinLine(matrix);
-    const winAmount = winLine ? bet * WIN_MULTIPLIER : 0;
+    const stops = randomStops();
+    const matrix = matrixFromStops(stops);
+    const { winAmount, winningCells, lines } = evaluateWin(matrix, bet);
     const steps = [
       {
         type: 'base',
+        stops,
         matrix,
-        winningCells: winLine?.cells ?? [],
+        winningCells,
+        lines,
         win: winAmount,
       },
     ];
@@ -111,8 +101,10 @@ Deno.serve(async (req) => {
 
     return json({
       matrix,
+      stops,
       winAmount,
-      winningCells: winLine?.cells ?? [],
+      winningCells,
+      lines,
       balance: Number(row.balance),
       totalWin: Number(row.total_win),
       roundId: row.round_id,

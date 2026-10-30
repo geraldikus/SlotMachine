@@ -1,32 +1,74 @@
-import { Assets, Container, Graphics, Sprite, Text } from 'pixi.js';
-import { assetUrl } from '../../utils/assetUrl';
+import { Assets, Container, Graphics, Rectangle, Sprite, Text } from 'pixi.js';
 
-const INACTIVE_COLOR = 0x3a3a5c;
-const ACTIVE_COLOR = 0x51cf66;
+const FILL = 0x2a2a4a;
+const STROKE = 0x3a3a5c;
+const WELL = 0x1e1e36;
+const LABEL = 0xffffff;
+const MUTED = 0x8b93a7;
+const PRESS_SCALE = 0.97;
+const RELEASE_MS = 180;
+const ICON_BOX = 28;
+const ICON_SIZE = 16;
+const PAD_X = 8;
+
+export interface DemoButtonOptions {
+  title: string;
+  width: number;
+  height: number;
+  icon: string;
+  accent: number;
+  onTap: () => void;
+}
 
 export class DemoButton extends Container {
-  private readonly btnWidth: number;
-  private readonly btnHeight: number;
+  private readonly accent: number;
   private readonly onTap: () => void;
+  private readonly face: Container;
+  private readonly background: Graphics;
+  private readonly iconWell: Graphics;
+  private readonly caption: Text;
   private icon: Sprite | null = null;
   private isActive = false;
   private isEnabled = true;
-  private readonly background: Graphics;
+  private isPressed = false;
+  private releaseToken = 0;
 
-  constructor(title: string, btnWidth: number, btnHeight: number, onTap: () => void) {
+  constructor(options: DemoButtonOptions) {
     super();
-    this.btnWidth = btnWidth;
-    this.btnHeight = btnHeight;
-    this.onTap = onTap;
-
-    this.background = new Graphics();
-    this.drawBackground(INACTIVE_COLOR);
-    this.addChild(this.background);
-
-    void this.setButtonText(title, btnWidth, btnHeight);
-
+    this.accent = options.accent;
+    this.onTap = options.onTap;
     this.eventMode = 'static';
     this.cursor = 'pointer';
+    this.hitArea = new Rectangle(0, 0, options.width, options.height);
+
+    this.face = new Container();
+    this.face.eventMode = 'none';
+    this.face.pivot.set(options.width / 2, options.height / 2);
+    this.face.position.set(options.width / 2, options.height / 2);
+    this.addChild(this.face);
+
+    this.background = new Graphics();
+    this.face.addChild(this.background);
+
+    this.iconWell = new Graphics();
+    this.face.addChild(this.iconWell);
+
+    this.caption = new Text({
+      text: options.title,
+      style: {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: 14,
+        fill: LABEL,
+        fontWeight: 'bold',
+      },
+    });
+    this.caption.anchor.set(0, 0.5);
+    this.caption.position.set(PAD_X + ICON_BOX + PAD_X, options.height / 2);
+    this.face.addChild(this.caption);
+
+    this.applyState();
+    void this.loadIcon(options.icon);
+
     this.on('pointerdown', this.handlePointerDown);
     this.on('pointerup', this.handlePointerUp);
     this.on('pointerupoutside', this.handlePointerUp);
@@ -34,83 +76,104 @@ export class DemoButton extends Container {
 
   setActive(active: boolean): void {
     this.isActive = active;
-    this.drawBackground(active ? ACTIVE_COLOR : INACTIVE_COLOR);
+    this.applyState();
   }
 
   setEnabled(enabled: boolean): void {
     this.isEnabled = enabled;
-    this.eventMode = enabled ? 'static' : 'none';
-    this.cursor = enabled ? 'pointer' : 'default';
-    this.alpha = enabled ? 1 : 0.4;
+    if (!enabled) {
+      this.isPressed = false;
+      this.releaseToken += 1;
+      this.face.scale.set(1);
+    }
+    this.applyState();
   }
 
-  private drawBackground(color: number): void {
+  private applyState(): void {
+    const width = this.hitArea instanceof Rectangle ? this.hitArea.width : 0;
+    const height = this.hitArea instanceof Rectangle ? this.hitArea.height : 0;
+    const highlighted = this.isActive && this.isEnabled;
+
     this.background.clear();
-    this.background.roundRect(0, 0, this.btnWidth, this.btnHeight, 8).fill(color);
+    this.background.roundRect(0, 0, width, height, 10).fill(FILL);
+    this.background.stroke({
+      width: highlighted ? 2 : 1,
+      color: highlighted ? this.accent : STROKE,
+    });
+
+    const wellY = (height - ICON_BOX) / 2;
+    this.iconWell.clear();
+    this.iconWell.roundRect(PAD_X, wellY, ICON_BOX, ICON_BOX, 8).fill(WELL);
+    this.iconWell.stroke({
+      width: 1,
+      color: highlighted ? this.accent : STROKE,
+    });
+
+    this.caption.style.fill = this.isEnabled ? LABEL : MUTED;
+    if (this.icon) {
+      if (!this.isEnabled) {
+        this.icon.tint = MUTED;
+      } else if (this.isActive) {
+        this.icon.tint = this.accent;
+      } else {
+        this.icon.tint = 0xffffff;
+      }
+    }
+
+    this.eventMode = this.isEnabled ? 'static' : 'none';
+    this.cursor = this.isEnabled ? 'pointer' : 'default';
+  }
+
+  private async loadIcon(path: string): Promise<void> {
+    const texture = await Assets.load(path);
+    const height = this.hitArea instanceof Rectangle ? this.hitArea.height : 0;
+    this.icon = new Sprite(texture);
+    this.icon.anchor.set(0.5);
+    this.icon.width = ICON_SIZE;
+    this.icon.height = ICON_SIZE;
+    this.icon.position.set(PAD_X + ICON_BOX / 2, height / 2);
+    this.face.addChild(this.icon);
+    this.applyState();
   }
 
   private handlePointerDown = (): void => {
     if (!this.isEnabled) {
       return;
     }
-    this.alpha = 0.85;
-    this.spinIcon();
+    this.isPressed = true;
+    this.releaseToken += 1;
+    this.face.scale.set(PRESS_SCALE);
     this.onTap();
   };
 
   private handlePointerUp = (): void => {
-    this.alpha = this.isEnabled ? 1 : 0.4;
-    this.drawBackground(this.isActive ? ACTIVE_COLOR : INACTIVE_COLOR);
+    if (!this.isPressed) {
+      return;
+    }
+    this.isPressed = false;
+    this.releaseFace();
   };
 
-  private async setButtonText(title: string, btnWidth: number, btnHeight: number): Promise<void> {
-    const iconSize = 16;
-    const gap = 8;
-
-    const buttonText = new Text({
-      text: title,
-      style: {
-        fontFamily: 'Arial, sans-serif',
-        fontSize: 14,
-        fill: 0xffffff,
-        fontWeight: 'bold',
-      },
-    });
-
-    buttonText.anchor.set(0, 0.5);
-
-    const texture = await Assets.load(assetUrl('assets/icon/refresh-ccw.svg'));
-    this.icon = new Sprite(texture);
-    this.icon.width = iconSize;
-    this.icon.height = iconSize;
-    this.icon.anchor.set(0.5);
-
-    const contentWidth = iconSize + gap + buttonText.width;
-    const startX = (btnWidth - contentWidth) / 2;
-    const centerY = btnHeight / 2;
-
-    this.icon.position.set(startX + iconSize / 2, centerY);
-    buttonText.position.set(startX + iconSize + gap, centerY);
-
-    this.addChild(this.icon);
-    this.addChild(buttonText);
-  }
-
-  private spinIcon(): void {
-    if (!this.icon) return;
-
-    const duration = 400;
+  private releaseFace(): void {
+    const token = ++this.releaseToken;
+    const from = this.face.scale.x;
     const start = performance.now();
-    const from = this.icon.rotation;
-    const to = from + Math.PI * 2;
-
     const tick = (now: number): void => {
-      if (!this.icon) return;
-      const t = Math.min(1, (now - start) / duration);
-      this.icon.rotation = from + (to - from) * t;
-      if (t < 1) requestAnimationFrame(tick);
+      if (token !== this.releaseToken) {
+        return;
+      }
+      const progress = Math.min(1, (now - start) / RELEASE_MS);
+      this.face.scale.set(from + (1 - from) * easeOutBack(progress));
+      if (progress < 1) {
+        requestAnimationFrame(tick);
+      }
     };
-
     requestAnimationFrame(tick);
   }
+}
+
+function easeOutBack(t: number): number {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2;
 }
