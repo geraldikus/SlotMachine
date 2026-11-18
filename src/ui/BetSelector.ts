@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import { STRINGS } from '../config/strings';
 import { BET_OPTIONS, formatFun } from '../config/currency';
 import { LayoutProfile } from '../layout/types';
 
@@ -66,7 +67,7 @@ export class BetSelector extends Container {
     background.roundRect(0, 0, width, 64, 8).fill({ color: 0x2a2a4a });
     this.addChild(background);
 
-    const labelText = new Text({ text: 'TOTAL BET', style: LABEL_STYLE });
+    const labelText = new Text({ text: STRINGS.hud.totalBet, style: LABEL_STYLE });
     labelText.position.set(12, 10);
     this.addChild(labelText);
 
@@ -145,7 +146,7 @@ export class BetSelector extends Container {
     panel.addChild(background);
 
     const title = new Text({
-      text: 'SELECT BET',
+      text: STRINGS.hud.selectBet,
       style: {
         fontFamily: 'Arial, sans-serif',
         fontSize: 12,

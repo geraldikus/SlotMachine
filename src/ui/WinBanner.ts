@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import { STRINGS } from '../config/strings';
 import { formatFun } from '../config/currency';
 import { LayoutProfile } from '../layout/types';
 
@@ -23,7 +24,7 @@ export class WinBanner extends Container {
     this.addChild(this.background);
 
     const label = new Text({
-      text: 'WIN',
+      text: STRINGS.hud.win,
       style: {
         fontFamily: 'Arial, sans-serif',
         fontSize: 18,

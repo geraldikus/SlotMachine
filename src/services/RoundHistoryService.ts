@@ -1,3 +1,4 @@
+import { STRINGS } from '../config/strings';
 import { RoundRecord, RoundStep, SUPPORTED_MATH_VERSIONS, SUPPORTED_REPLAY_VERSIONS } from '../round/types';
 import { SpinSource } from './SpinService';
 import { InMemoryRoundHistory } from './InMemoryRoundHistory';
@@ -65,7 +66,7 @@ export class RoundHistoryService {
         throw error;
       }
       console.error(error);
-      throw new RoundHistoryError('LOAD_FAILED', 'Не удалось загрузить историю');
+      throw new RoundHistoryError('LOAD_FAILED', STRINGS.history.loadFailed);
     }
   }
 
@@ -75,11 +76,11 @@ export class RoundHistoryService {
       : await this.loadRemoteRound(id);
 
     if (!round || round.steps.length === 0) {
-      throw new RoundHistoryError('ROUND_NOT_FOUND', 'Раунд не найден или истёк');
+      throw new RoundHistoryError('ROUND_NOT_FOUND', STRINGS.history.roundNotFound);
     }
 
     if (!SUPPORTED_REPLAY_VERSIONS.includes(round.gameVersion) || !isReplayableRound(round)) {
-      throw new RoundHistoryError('UNSUPPORTED_VERSION', 'Replay недоступен для этой версии игры');
+      throw new RoundHistoryError('UNSUPPORTED_VERSION', STRINGS.history.replayUnsupported);
     }
 
     return round;
@@ -93,7 +94,7 @@ export class RoundHistoryService {
         throw error;
       }
       console.error(error);
-      throw new RoundHistoryError('LOAD_FAILED', 'Не удалось загрузить историю');
+      throw new RoundHistoryError('LOAD_FAILED', STRINGS.history.loadFailed);
     }
   }
 }
@@ -110,7 +111,7 @@ export function createSupabaseRoundGateway(): RemoteRoundGateway {
 
       if (error) {
         console.error(error.message);
-        throw new RoundHistoryError('LOAD_FAILED', 'Не удалось загрузить историю');
+        throw new RoundHistoryError('LOAD_FAILED', STRINGS.history.loadFailed);
       }
 
       return (data ?? []).map((row) => mapRoundRow(row as RoundRow));
@@ -126,7 +127,7 @@ export function createSupabaseRoundGateway(): RemoteRoundGateway {
 
       if (error) {
         console.error(error.message);
-        throw new RoundHistoryError('LOAD_FAILED', 'Не удалось загрузить историю');
+        throw new RoundHistoryError('LOAD_FAILED', STRINGS.history.loadFailed);
       }
 
       return data ? mapRoundRow(data as RoundRow) : null;

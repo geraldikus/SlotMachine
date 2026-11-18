@@ -92,7 +92,7 @@ export class WinPresentation {
       '-=0.05',
     );
 
-    // Откат к базовому размеру
+    // Back to the base size
     tl.to(
       pulseWraps,
       {
@@ -111,7 +111,7 @@ export class WinPresentation {
       '-=0.15',
     );
 
-    // Точки линии — pop по очереди
+    // Line points pop one by one
     const dots = ctx.overlay.dots;
     if (dots.length > 0) {
       tl.from(
@@ -127,7 +127,7 @@ export class WinPresentation {
     }
 
     // ── 4. Banner ──
-    const bannerBaseY = ctx.banner.y + 40; // prepareShow установил y = baseY - 40
+    const bannerBaseY = ctx.banner.y + 40; // prepareShow set y = baseY - 40
     tl.to(
       ctx.banner,
       {
@@ -138,7 +138,7 @@ export class WinPresentation {
       '-=0.1',
     );
 
-    // Punch на сумме
+    // Punch on the amount
     tl.fromTo(
       ctx.banner.amountText,
       { pixi: { scale: 1.4 } },
@@ -159,7 +159,7 @@ export class WinPresentation {
   private startIdleLoop(ctx: WinContext): void {
     this.idleTl = gsap.timeline({ repeat: -1 });
 
-    // Пульс символов
+    // Symbol pulse
     const pulseWraps = ctx.highlighted.map((c) => c.pulseWrap);
     this.idleTl.to(
       pulseWraps,
@@ -173,7 +173,7 @@ export class WinPresentation {
       0,
     );
 
-    // Пульс glow линии
+    // Line glow pulse
     this.idleTl.to(
       ctx.overlay.glowLine,
       {

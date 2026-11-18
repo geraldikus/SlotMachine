@@ -1,4 +1,5 @@
 import { DEFAULT_BET, INITIAL_BALANCE, INITIAL_TOTAL_WIN } from '../../config/currency';
+import { STRINGS } from '../../config/strings';
 import { LayoutProfile } from '../../layout/types';
 import { SoundService } from '../../services/SoundService';
 import { SpinService, SpinSourceSwitch } from '../../services/SpinService';
@@ -86,7 +87,7 @@ export class MobileGameUI extends CurrencyUI implements IGameUI {
     const spinX = profile.designWidth - profile.padding - spinWidth / 2
     const autoSpinX = profile.padding + statBoxWidth / 2;
 
-    this.spinButton = new SpinButton(spinWidth, profile, "SPIN", onSpin);
+    this.spinButton = new SpinButton(spinWidth, profile, STRINGS.hud.spin, onSpin);
     this.spinButton.position.set(spinX, spinLayout.y);
     this.addChild(this.spinButton);
 

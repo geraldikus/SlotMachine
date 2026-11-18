@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import { STRINGS } from '../../config/strings';
 import { DEFAULT_BET, INITIAL_BALANCE, INITIAL_TOTAL_WIN } from '../../config/currency';
 import { LayoutProfile } from '../../layout/types';
 import { AnimatedCounter } from '../AnimatedCounter';
@@ -61,7 +62,7 @@ export class DesktopGameUI extends Container implements IGameUI {
     this.betSelector.position.set(betX, betY);
     this.addChild(this.betSelector);
 
-    this.spinButton = new SpinButton(spinWidth, profile, 'SPIN', onSpin);
+    this.spinButton = new SpinButton(spinWidth, profile, STRINGS.hud.spin, onSpin);
     this.spinButton.position.set(spinLayout.x, spinLayout.y);
     this.addChild(this.spinButton);
 
@@ -96,7 +97,7 @@ export class DesktopGameUI extends Container implements IGameUI {
     });
     bar.addChild(background);
 
-    const balanceLabel = new Text({ text: 'BALANCE', style: LABEL_STYLE });
+    const balanceLabel = new Text({ text: STRINGS.hud.balance, style: LABEL_STYLE });
     balanceLabel.position.set(panel.x + 16, profile.padding + 8);
     bar.addChild(balanceLabel);
 
@@ -107,7 +108,7 @@ export class DesktopGameUI extends Container implements IGameUI {
     balanceText.position.set(panel.x + 16, profile.padding + 24);
     bar.addChild(balanceText);
 
-    const winLabel = new Text({ text: 'TOTAL WIN', style: LABEL_STYLE });
+    const winLabel = new Text({ text: STRINGS.hud.totalWin, style: LABEL_STYLE });
     winLabel.position.set(panel.x + panel.width - 180, profile.padding + 8);
     bar.addChild(winLabel);
 

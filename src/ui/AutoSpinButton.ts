@@ -1,4 +1,5 @@
 import { Assets, Container, Graphics, Sprite, Text } from 'pixi.js';
+import { STRINGS } from '../config/strings';
 import { LayoutProfile } from '../layout/types';
 
 const PRESS_SCALE = 0.95;
@@ -39,7 +40,7 @@ export class AutoSpinButton extends Container {
     const fontSize = profile.id === 'desktop' ? 24 : 22;
 
     this.caption = new Text({
-      text: 'AUTO',
+      text: STRINGS.hud.auto,
       style: {
         fontSize,
         fill: 0xffffff,
@@ -92,7 +93,7 @@ export class AutoSpinButton extends Container {
 
   setActive(active: boolean): void {
     this.setIconSpinning(active);
-    this.caption.text = active ? 'STOP' : 'AUTO';
+    this.caption.text = active ? STRINGS.hud.stop : STRINGS.hud.auto;
     // STOP stays full brightness; only idle AUTO can be dimmed during a manual spin.
     if (active) {
       this.setDimmed(false);

@@ -1,4 +1,5 @@
 import { Container, Graphics, Sprite, Text } from 'pixi.js';
+import { STRINGS } from '../../config/strings';
 import { SymbolTextureMap } from '../../assets/loadSymbols';
 import { formatFun } from '../../config/currency';
 import { SymbolKey } from '../../config/types';
@@ -11,14 +12,7 @@ const ROW_HEIGHT = 52;
 const CLOSE_SIZE = 28;
 const SYMBOL_SIZE = 40;
 
-const SYMBOL_NAMES: Record<string, string> = {
-  strawberry: 'Strawberry',
-  'red-cherry': 'Red cherry',
-  raspberry: 'Raspberry',
-  'black-cherry': 'Black cherry',
-  'black-berry-dark': 'Blackberry',
-  'black-berry-light': 'Light berry',
-};
+const SYMBOL_NAMES = STRINGS.paytable.symbols;
 
 export class PaytablePanel extends Container {
   private readonly body = new Container();
@@ -35,7 +29,7 @@ export class PaytablePanel extends Container {
     this.addChild(this.background);
 
     const title = new Text({
-      text: 'PAYTABLE',
+      text: STRINGS.paytable.title,
       style: { fill: 0xffffff, fontSize: 16, fontWeight: 'bold', fontFamily: 'Arial, sans-serif' },
     });
     title.position.set(PADDING, 14);
@@ -97,7 +91,7 @@ export class PaytablePanel extends Container {
 
     y += 8;
     const linesTitle = new Text({
-      text: '3 or 4 in a row from either end. A gap does not pay. A column pays x3.',
+      text: STRINGS.paytable.rules,
       style: {
         fill: 0xc9d1d9,
         fontSize: 13,

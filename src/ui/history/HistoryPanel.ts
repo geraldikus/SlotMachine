@@ -1,4 +1,5 @@
 import { Container, Graphics, Rectangle, Text } from 'pixi.js';
+import { STRINGS } from '../../config/strings';
 import { formatFun } from '../../config/currency';
 import { RoundRecord } from '../../round/types';
 
@@ -27,7 +28,7 @@ export class HistoryPanel extends Container {
     this.addChild(this.background);
 
     const title = new Text({
-      text: 'HISTORY',
+      text: STRINGS.history.title,
       style: { fill: 0xffffff, fontSize: 16, fontWeight: 'bold', fontFamily: 'Arial, sans-serif' },
     });
     title.position.set(PADDING, 14);
@@ -104,7 +105,7 @@ export class HistoryPanel extends Container {
     this.list.removeChildren();
 
     if (this.rounds.length === 0) {
-      this.message.text = 'No rounds yet';
+      this.message.text = STRINGS.history.empty;
       this.message.visible = true;
       this.resize(28);
       return;
@@ -157,7 +158,7 @@ export class HistoryPanel extends Container {
     replayBackground.roundRect(0, 0, 72, 28, 6).fill({ color: 0x3d5a80 });
     replay.addChild(replayBackground);
     const replayLabel = new Text({
-      text: 'Replay',
+      text: STRINGS.history.replayButton,
       style: { fill: 0xffffff, fontSize: 13, fontWeight: 'bold', fontFamily: 'Arial, sans-serif' },
     });
     replayLabel.anchor.set(0.5);

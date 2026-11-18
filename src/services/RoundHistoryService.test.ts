@@ -82,7 +82,7 @@ describe('RoundHistoryService', () => {
 
     await expect(service.getRound('missing')).rejects.toMatchObject({
       code: 'ROUND_NOT_FOUND',
-      message: 'Раунд не найден или истёк',
+      message: 'Round not found or expired',
     });
   });
 
@@ -97,7 +97,7 @@ describe('RoundHistoryService', () => {
     await expect(service.getRound('old')).rejects.toBeInstanceOf(RoundHistoryError);
     await expect(service.getRound('old')).rejects.toMatchObject({
       code: 'UNSUPPORTED_VERSION',
-      message: 'Replay недоступен для этой версии игры',
+      message: 'Replay is not available for this game version',
     });
   });
 
@@ -111,7 +111,7 @@ describe('RoundHistoryService', () => {
 
     await expect(service.getRound('legacy')).rejects.toMatchObject({
       code: 'UNSUPPORTED_VERSION',
-      message: 'Replay недоступен для этой версии игры',
+      message: 'Replay is not available for this game version',
     });
   });
 });

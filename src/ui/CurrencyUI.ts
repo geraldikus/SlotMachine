@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import { STRINGS } from '../config/strings';
 import { formatFun } from '../config/currency';
 import { LayoutProfile } from '../layout/types';
 import { SoundService } from '../services/SoundService';
@@ -48,7 +49,7 @@ export class CurrencyUI extends Container {
     balancePanel.addChild(balanceBg);
 
     const balanceLabel = new Text({
-      text: 'BALANCE',
+      text: STRINGS.hud.balance,
       style: LABEL_STYLE,
     });
     balanceLabel.position.set(16, 10);
@@ -72,7 +73,7 @@ export class CurrencyUI extends Container {
     const statsX = profile.padding;
     const statsY = profile.getFooterTop() + 16;
 
-    const winBox = this.createStatBox('TOTAL WIN', formatFun(0), statBoxWidth, {
+    const winBox = this.createStatBox(STRINGS.hud.totalWin, formatFun(0), statBoxWidth, {
       ...VALUE_STYLE,
       fill: 0x4ecdc4,
     });

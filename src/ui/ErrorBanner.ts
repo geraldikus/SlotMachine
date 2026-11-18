@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import { STRINGS } from '../config/strings';
 import { LayoutProfile } from '../layout/types';
 
 const BANNER_HEIGHT = 44;
@@ -18,7 +19,7 @@ export class ErrorBanner extends Container {
     this.addChild(background);
 
     this.messageText = new Text({
-      text: 'Network error',
+      text: STRINGS.genericError,
       style: {
         fontFamily: 'Arial, sans-serif',
         fontSize: 18,
@@ -32,7 +33,7 @@ export class ErrorBanner extends Container {
     this.position.set(banner.x, banner.y);
   }
 
-  show(message = 'Network error'): void {
+  show(message: string = STRINGS.genericError): void {
     this.messageText.text = message;
     this.visible = true;
   }

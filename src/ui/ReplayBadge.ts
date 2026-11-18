@@ -1,4 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
+import { STRINGS } from '../config/strings';
 
 const BADGE_WIDTH = 188;
 const BADGE_HEIGHT = 44;
@@ -13,7 +14,7 @@ export class ReplayBadge extends Container {
     this.addChild(background);
 
     const label = new Text({
-      text: 'REPLAY',
+      text: STRINGS.hud.replay,
       style: {
         fontFamily: 'Arial, sans-serif',
         fontSize: 16,
@@ -33,7 +34,7 @@ export class ReplayBadge extends Container {
     exit.addChild(exitBackground);
 
     const exitLabel = new Text({
-      text: 'EXIT',
+      text: STRINGS.hud.exit,
       style: {
         fontFamily: 'Arial, sans-serif',
         fontSize: 13,
