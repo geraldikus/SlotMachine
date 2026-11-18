@@ -19,19 +19,33 @@ type ReelPhase = 'idle' | 'spinning' | 'decelerating' | 'snapping';
 
 const SPIN_SPEED = 28;
 const MIN_STOP_SPEED = 4;
+/** Speed lost per pixel squared: v² = MIN² + 2 · DECELERATION · remaining distance. */
 const DECELERATION = 0.35;
 const WRAP_THRESHOLD = REEL_HEIGHT;
 const WRAP_OFFSET = SPRITE_COUNT * SYMBOL_SIZE;
-const SIMULATION_DELTA = 1;
 const TOP_BUFFER_OFFSET = -2;
+/** Grid origin: the top buffer cell sits at y = -300. */
+const GRID_ORIGIN = 2 * SYMBOL_SIZE;
+/** A frame never moves the strip by a full cell, even after a long frame. */
+const MAX_FRAME_STEP = SYMBOL_SIZE - 1;
+/** Absorbs float drift so a cell that ends exactly on the wrap line still wraps. */
+const POSITION_EPSILON = 0.001;
 
-interface DecelerationSimulation {
-  wrapCellIndices: number[];
-  finalYs: number[];
+/** What one cell does between stopSpin() and the final grid position. */
+interface CellLanding {
+  wraps: number;
+  finalY: number;
 }
 
 function mod(value: number, length: number): number {
   return ((value % length) + length) % length;
+}
+
+/** Where a cell ends after moving `distance` down, wrapping from the bottom to the top. */
+function landCell(startY: number, distance: number): CellLanding {
+  const firstWrapAt = WRAP_THRESHOLD - POSITION_EPSILON - startY;
+  const wraps = distance < firstWrapAt ? 0 : Math.floor((distance - firstWrapAt) / WRAP_OFFSET) + 1;
+  return { wraps, finalY: Math.round(startY + distance - wraps * WRAP_OFFSET) };
 }
 
 export class Reel extends Container {
@@ -43,12 +57,12 @@ export class Reel extends Container {
   private phase: ReelPhase = 'idle';
   private isSpinning = false;
   private currentSpeed = 0;
-  private pendingIndices: number[] = [];
+  /** Strip indices each cell takes on its remaining wraps, in order. */
+  private pendingByCell: number[][] = [];
   private stopDistanceRemaining = 0;
   private headIndex = 0;
   private nextIncoming = 0;
   private pendingStop: number | null = null;
-  private snapTween?: gsap.core.Tween;
   private juiceTween?: gsap.core.Timeline;
 
   constructor(
@@ -103,7 +117,6 @@ export class Reel extends Container {
   }
 
   startSpin(): void {
-    this.snapTween?.kill();
     this.juiceTween?.kill();
 
     this.reelLayer.y = 0;
@@ -112,15 +125,13 @@ export class Reel extends Container {
     this.phase = 'spinning';
     this.isSpinning = true;
     this.currentSpeed = SPIN_SPEED;
-    this.pendingIndices = [];
+    this.pendingByCell = [];
     this.pendingStop = null;
     this.stopDistanceRemaining = 0;
   }
 
   forceIdle(stopIndex?: number): void {
-    this.snapTween?.kill();
     this.juiceTween?.kill();
-    this.snapTween = undefined;
     this.juiceTween = undefined;
 
     this.reelLayer.y = 0;
@@ -147,7 +158,7 @@ export class Reel extends Container {
     this.phase = 'idle';
     this.isSpinning = false;
     this.currentSpeed = 0;
-    this.pendingIndices = [];
+    this.pendingByCell = [];
     this.pendingStop = null;
     this.stopDistanceRemaining = 0;
 
@@ -156,24 +167,37 @@ export class Reel extends Container {
     }
   }
 
+  /**
+   * Plans the stop so the strip lands exactly on the grid with the requested window.
+   * The plan is a distance, not a frame count, so frame timing cannot change where it lands.
+   */
   stopSpin(stopIndex: number): void {
-    if (this.phase === 'idle') return;
+    if (this.phase !== 'spinning') return;
 
     const stop = mod(stopIndex, this.strip.length);
     this.pendingStop = stop;
-    let extraDistance = 0;
-    let simulation = this.simulateDecelerationPhase(extraDistance);
-    let requiredIndices = this.getRequiredEndIndices(stop, simulation.finalYs);
-    const wrappedCount = new Set(simulation.wrapCellIndices).size;
 
-    if (wrappedCount < SPRITE_COUNT || !this.canLandNaturally(simulation, requiredIndices)) {
-      extraDistance = WRAP_OFFSET;
-      simulation = this.simulateDecelerationPhase(extraDistance);
-      requiredIndices = this.getRequiredEndIndices(stop, simulation.finalYs);
+    let distance = this.alignToGrid(this.brakingDistance(this.currentSpeed));
+    let landings = this.cells.map((cell) => landCell(cell.y, distance));
+    let required = this.requiredIndices(stop, landings);
+
+    // A cell that does not wrap keeps its symbol, so it must already show the right one.
+    const landsWithoutRespin = landings.every(
+      (landing, i) => landing.wraps > 0 || this.cellIndices[i] === required[i],
+    );
+    if (!landsWithoutRespin) {
+      distance += WRAP_OFFSET;
+      landings = this.cells.map((cell) => landCell(cell.y, distance));
+      required = this.requiredIndices(stop, landings);
     }
 
-    this.pendingIndices = this.buildQueueFromWraps(simulation.wrapCellIndices, requiredIndices);
-    this.stopDistanceRemaining = this.estimateTotalDecelerationDistance() + extraDistance;
+    // Earlier wraps show the symbols that scroll past above the final one.
+    this.pendingByCell = landings.map((landing, i) =>
+      Array.from({ length: landing.wraps }, (_, wrap) =>
+        mod(required[i] + (landing.wraps - 1 - wrap) * SPRITE_COUNT, this.strip.length),
+      ),
+    );
+    this.stopDistanceRemaining = distance;
     this.phase = 'decelerating';
   }
 
@@ -184,17 +208,21 @@ export class Reel extends Container {
 
     if (!this.isSpinning) return;
 
-    const speed = this.currentSpeed * deltaTime;
-    this.moveCells(speed);
-
     if (this.phase === 'decelerating') {
-      this.stopDistanceRemaining = Math.max(0, this.stopDistanceRemaining - speed);
-      this.currentSpeed = Math.max(MIN_STOP_SPEED, this.currentSpeed - DECELERATION * deltaTime);
+      // Speed follows the remaining distance, so the reel reaches MIN_STOP_SPEED as it lands.
+      const brakingSpeed = Math.sqrt(MIN_STOP_SPEED ** 2 + 2 * DECELERATION * this.stopDistanceRemaining);
+      this.currentSpeed = Math.min(this.currentSpeed, brakingSpeed);
+      const step = Math.min(this.currentSpeed * deltaTime, this.stopDistanceRemaining, MAX_FRAME_STEP);
+      this.moveCells(step);
+      this.stopDistanceRemaining -= step;
 
-      if (this.stopDistanceRemaining <= 0 && this.currentSpeed <= MIN_STOP_SPEED) {
+      if (this.stopDistanceRemaining <= POSITION_EPSILON) {
         this.beginSnap();
       }
+      return;
     }
+
+    this.moveCells(Math.min(this.currentSpeed * deltaTime, MAX_FRAME_STEP));
   }
 
   private moveCells(deltaY: number): void {
@@ -202,20 +230,19 @@ export class Reel extends Container {
       const cell = this.cells[i];
       cell.y += deltaY;
 
-      if (cell.y >= WRAP_THRESHOLD) {
+      if (cell.y >= WRAP_THRESHOLD - POSITION_EPSILON) {
         cell.y -= WRAP_OFFSET;
-        if (this.phase !== 'snapping') {
-          const index = this.resolveNextIndex();
-          this.cellIndices[i] = index;
-          cell.setSymbol(this.strip[index]);
-        }
+        const index = this.resolveNextIndex(i);
+        this.cellIndices[i] = index;
+        cell.setSymbol(this.strip[index]);
       }
     }
   }
 
-  private resolveNextIndex(): number {
-    if (this.pendingIndices.length > 0) {
-      return this.pendingIndices.shift()!;
+  private resolveNextIndex(cellIndex: number): number {
+    const planned = this.pendingByCell[cellIndex];
+    if (planned && planned.length > 0) {
+      return planned.shift()!;
     }
 
     const index = this.nextIncoming;
@@ -223,111 +250,42 @@ export class Reel extends Container {
     return index;
   }
 
-  private estimateTotalDecelerationDistance(): number {
-    let speed = this.currentSpeed;
-    let distance = 0;
-
-    while (speed > MIN_STOP_SPEED) {
-      distance += speed * SIMULATION_DELTA;
-      speed = Math.max(MIN_STOP_SPEED, speed - DECELERATION * SIMULATION_DELTA);
-    }
-
-    return distance;
+  /** Distance needed to slow from `speed` to MIN_STOP_SPEED. */
+  private brakingDistance(speed: number): number {
+    return Math.max(0, (speed ** 2 - MIN_STOP_SPEED ** 2) / (2 * DECELERATION));
   }
 
-  private simulateDecelerationPhase(extraDistance = 0): DecelerationSimulation {
-    const ys = this.cells.map((cell) => cell.y);
-    const wrapCellIndices: number[] = [];
-    let speed = this.currentSpeed;
-    let traveled = 0;
-    const totalDistance = this.estimateTotalDecelerationDistance() + extraDistance;
-
-    while (traveled < totalDistance) {
-      const step = Math.min(speed * SIMULATION_DELTA, totalDistance - traveled);
-      traveled += step;
-
-      for (let i = 0; i < ys.length; i += 1) {
-        ys[i] += step;
-
-        while (ys[i] >= WRAP_THRESHOLD) {
-          ys[i] -= WRAP_OFFSET;
-          wrapCellIndices.push(i);
-        }
-      }
-
-      if (speed > MIN_STOP_SPEED) {
-        speed = Math.max(MIN_STOP_SPEED, speed - DECELERATION * SIMULATION_DELTA);
-      }
-    }
-
-    return { wrapCellIndices, finalYs: ys };
+  /** Extends a distance so the strip ends on a grid line. All cells share one grid offset. */
+  private alignToGrid(distance: number): number {
+    const endOffset = mod(this.cells[0].y + distance + GRID_ORIGIN, SYMBOL_SIZE);
+    return endOffset === 0 ? distance : distance + (SYMBOL_SIZE - endOffset);
   }
 
-  private getRequiredEndIndices(stopIndex: number, finalYs: number[]): number[] {
-    return finalYs.map((y) => {
-      const gridY = this.nearestGridY(y);
-      const slot = Math.round((gridY + 300) / SYMBOL_SIZE);
+  private requiredIndices(stopIndex: number, landings: CellLanding[]): number[] {
+    return landings.map(({ finalY }) => {
+      const slot = Math.round((finalY + GRID_ORIGIN) / SYMBOL_SIZE);
       return mod(stopIndex + (slot - 2), this.strip.length);
     });
   }
 
-  private canLandNaturally(simulation: DecelerationSimulation, requiredIndices: number[]): boolean {
-    const wrappedCells = new Set(simulation.wrapCellIndices);
-
-    return this.cellIndices.every((index, cellIndex) => {
-      if (wrappedCells.has(cellIndex)) return true;
-      return index === requiredIndices[cellIndex];
-    });
-  }
-
-  private buildQueueFromWraps(wrapCellIndices: number[], requiredIndices: number[]): number[] {
-    const queue = new Array<number>(wrapCellIndices.length);
-    const wrapsByCell = new Map<number, number[]>();
-
-    wrapCellIndices.forEach((cellIndex, wrapIndex) => {
-      const wraps = wrapsByCell.get(cellIndex) ?? [];
-      wraps.push(wrapIndex);
-      wrapsByCell.set(cellIndex, wraps);
-    });
-
-    for (const [cellIndex, wrapIndices] of wrapsByCell) {
-      wrapIndices.forEach((wrapIndex, position) => {
-        const wrapsBeforeFinal = wrapIndices.length - 1 - position;
-        queue[wrapIndex] = mod(
-          requiredIndices[cellIndex] + wrapsBeforeFinal * SPRITE_COUNT,
-          this.strip.length,
-        );
-      });
-    }
-
-    return queue;
-  }
-
+  /** The strip is on the grid now: remove float drift and play the landing bounce. */
   private beginSnap(): void {
     this.phase = 'snapping';
     this.isSpinning = false;
     this.currentSpeed = 0;
+    this.stopDistanceRemaining = 0;
 
-    const offsets = this.cells.map((cell) => cell.y - this.nearestGridY(cell.y));
-    const startOffset = offsets.reduce((sum, value) => sum + value, 0) / offsets.length;
+    for (const cell of this.cells) {
+      cell.y = this.nearestGridY(cell.y);
+    }
 
-    this.snapTween?.kill();
     this.juiceTween?.kill();
-
-    const snap = { offset: startOffset };
-    this.snapTween = gsap.to(snap, {
-      offset: 0,
-      duration: 1.1,
-      ease: 'elastic.out(1, 0.4)',
-      onUpdate: () => this.applySnapOffset(snap.offset),
-      onComplete: () => this.finalizeStop(),
-    });
 
     const isLastReel = this.reelIndex === 3;
     const bounceY = isLastReel ? 12 : 8;
     const squashScale = isLastReel ? 0.96 : 0.98;
 
-    this.juiceTween = gsap.timeline();
+    this.juiceTween = gsap.timeline({ onComplete: () => this.finalizeStop() });
     this.juiceTween.to(this.reelLayer, {
       pixi: { y: bounceY, scaleY: squashScale },
       duration: 0.08,
@@ -338,13 +296,6 @@ export class Reel extends Container {
       duration: 0.35,
       ease: 'elastic.out(1, 0.5)',
     });
-  }
-
-  private applySnapOffset(offset: number): void {
-    for (const cell of this.cells) {
-      const gridY = this.nearestGridY(cell.y - offset);
-      cell.y = gridY + offset;
-    }
   }
 
   private nearestGridY(y: number): number {
@@ -359,7 +310,13 @@ export class Reel extends Container {
     }
 
     if (this.pendingStop !== null) {
+      const landed = this.getVisibleSymbols();
       this.applyStopWindow(this.pendingStop);
+      const expected = this.getVisibleSymbols();
+      if (landed.join() !== expected.join()) {
+        // The landing plan is exact, so this means a regression in the stop logic.
+        console.error(`Reel ${this.reelIndex} landed on the wrong window`, { landed, expected, stop: this.pendingStop });
+      }
       this.pendingStop = null;
     } else {
       this.syncHeadFromCells();
@@ -367,7 +324,7 @@ export class Reel extends Container {
 
     this.phase = 'idle';
     this.isSpinning = false;
-    this.pendingIndices = [];
+    this.pendingByCell = [];
     this.stopDistanceRemaining = 0;
     this.emit('stopped');
   }
