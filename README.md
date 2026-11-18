@@ -46,6 +46,10 @@ A line pays `bet × multiplier`. Several lines on one spin add up. The Paytable 
 
 Bets are a fixed list: 1.5, 3, 5, 8, 10, 15, 20, 30, 50 FUN. A new session starts at 1000 FUN.
 
+All amounts are stored and computed as integers in minor units (1 FUN = 100), on the client, in the Edge Function and in Postgres. Only the UI formats them as FUN.
+
+**Demo math: RTP 128%, hit rate 34.6%.** This is intentional, so wins show up more often in the demo. Production slots usually keep RTP at 94–97%.
+
 Mock mode draws stops locally. Supabase mode receives the stops from the Edge Function. The client lands each reel on its stop index and checks that the visible window matches `matrixFromStops`.
 
 ## Architecture
@@ -65,6 +69,7 @@ flowchart LR
 
 | Folder | Role |
 | --- | --- |
+| `src/app` | Bootstrap and controllers: scene layout, wallet, round side effects, replay, source switch |
 | `src/ui` | Desktop and mobile HUD, banners, sound, launch screen |
 | `src/state` | Round state machine |
 | `src/engine` | Reels, symbols, win-line overlay |
@@ -79,7 +84,12 @@ flowchart LR
 
 ## Round state machine
 
-Reels stay in motion until two things are true: the network answer has arrived, and at least two seconds have passed (`MIN_SPIN_MS`). A failed request refunds the bet and stops the reels on the previous stop indices. In Supabase mode an interrupt after the request was sent does not refund locally, because the server already applied the round.
+Reels stay in motion until two things are true: the network answer has arrived, and at least two seconds have passed (`MIN_SPIN_MS`). A failed request stops the reels on the previous stop indices. The machine only accepts the answer to the current request id.
+
+Refunds depend on what the client knows about the server:
+
+- In mock mode, and when the server rejected the round outright (`INVALID_BET`, `INSUFFICIENT_FUNDS`, …), the bet is refunded locally.
+- When the outcome is unknown (network error, timeout, server error), the server may already have applied the round. The client does not refund. It reads the balance back from the server instead. An interrupt after the request was sent does the same.
 
 ```mermaid
 stateDiagram-v2
@@ -102,10 +112,15 @@ Main events: `USER_SPIN`, `BET_DEBITED`, `NETWORK_RESPONSE`, `NETWORK_ERROR`, `M
 
 Switching to Supabase signs the player in anonymously and loads `profiles.balance`. Each spin calls the `spin` Edge Function:
 
-1. Rejects an unknown bet or a balance that cannot cover it.
+1. Rejects a missing request id or an unknown bet.
 2. Draws four stop indices, reads the strip window, and evaluates the paylines.
-3. Persists the round through the `apply_round` RPC. The response includes `stops`, the derived matrix, the win, the balance, the seed, and the steps.
-4. Drops anonymous demo users and spin rows older than 24 hours.
+3. Persists the round through the `apply_round` RPC. Under a row lock on the profile it checks the balance, debits the bet, credits the win and stores the round. The response includes `stops`, the derived matrix, the win, the balance, the seed, and the steps.
+
+Every spin carries a UUID `requestId` from the client. `apply_round` applies a request id once per player. A repeat returns the stored round instead of playing a new one, so the client retries a network failure or a timeout with the same id and never pays twice.
+
+Errors come back as fixed codes (`INVALID_BET`, `INSUFFICIENT_FUNDS`, `INTERNAL_ERROR`, …). Details stay in the function logs.
+
+A `pg_cron` job removes anonymous demo users and rounds older than 24 hours once an hour.
 
 `apply_round` accepts a win of zero or more and requires `steps[0].stops` to be four numbers. The published anon key is enough for the browser. Service-role keys stay on the server. The Edge Function calls `apply_round` with the service-role key, so the browser cannot write a round or a balance directly.
 
@@ -115,7 +130,7 @@ Each completed round is stored in `public.rounds` for 24 hours: the bet, the win
 
 The History button in the demo panel lists the player's own rounds. Replay plays `step.stops` through `ReplayPlayer`. It never debits, credits, or refunds the balance, and it does not call `SpinService`. The reels land on the stored stop indices, so the visible window matches the original round.
 
-A round whose `game_version` or `math_version` is not in the client's supported list shows "Replay недоступен для этой версии игры". Older rounds saved before strip stops use that same message. A missing or expired id shows "Раунд не найден или истёк".
+A round whose `game_version` or `math_version` is not in the client's supported list shows "Replay is not available for this game version". Older rounds saved before strip stops use that same message. A missing or expired id shows "Round not found or expired".
 
 Mock mode keeps the same history in memory, so replay works without Supabase.
 
