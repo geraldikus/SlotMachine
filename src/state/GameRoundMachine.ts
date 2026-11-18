@@ -2,7 +2,7 @@ import { EventEmitter } from 'eventemitter3';
 import { matrixFromStops } from '../../supabase/functions/_shared/slotMath';
 import { ResultMatrix } from '../config/types';
 import { SlotEngine } from '../engine/SlotEngine';
-import { SpinService } from '../services/SpinService';
+import { SpinRequestError, SpinService } from '../services/SpinService';
 import {
   BalanceChangedEvent,
   EffectEvent,
@@ -45,7 +45,7 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
       autoSpinActive: false,
     };
 
-    // Подписываемся на события SpinService
+    // Spin service events
     this.spinService.on('spin:requested', (data) => {
       this._context.currentRequestId = data.requestId;
     });
@@ -58,7 +58,7 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
       this.dispatch({ type: 'NETWORK_ERROR', requestId: data.requestId, error: data.error });
     });
 
-    // Подписываемся на события SlotEngine
+    // Reel engine events
     this.engine.on('allStopped', () => {
       const matrix = this.engine.getVisibleMatrix();
       this.dispatch({ type: 'REELS_STOPPED', matrix });
@@ -137,7 +137,7 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
     switch (event.type) {
       case 'USER_SPIN':
         if (this._context.balance < event.bet) {
-          return; // Недостаточно средств
+          return; // Not enough balance
         }
         this._context.bet = event.bet;
         this.transition('debiting');
@@ -160,13 +160,13 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
 
       this.emit('balance:changed', { balance: this._context.balance, reason: 'debit' });
 
-      // Запускаем барабаны
+      // Start the reels
       this.emit('effect', { type: 'start_reels' });
 
-      // Запускаем сетевой запрос (через Promise для получения requestId)
+      // The service emits spin:requested synchronously, so the request id is known right away
       void this.spinService.requestSpin(event.bet);
 
-      // Запускаем таймер минимального времени спина
+      // Start the minimum spin timer
       this.startMinSpinTimer();
 
       this.transition('spinning');
@@ -176,8 +176,8 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
   private handleSpinningState(event: RoundEvent): void {
     switch (event.type) {
       case 'NETWORK_RESPONSE':
-        // Проверяем, что это актуальный запрос
-        if (event.requestId === this._context.currentRequestId || this._context.currentRequestId === null) {
+        // Only the answer to the current request counts
+        if (event.requestId === this._context.currentRequestId) {
           this._context.response = event.response;
           this._context.networkResponseReceived = true;
           this.checkReadyToStop();
@@ -185,13 +185,18 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
         break;
 
       case 'NETWORK_ERROR':
-        if (event.requestId === this._context.currentRequestId || this._context.currentRequestId === null) {
+        if (event.requestId === this._context.currentRequestId) {
           this._context.error = event.error;
           this._context.response = null;
           this._context.networkResponseReceived = false;
           this.clearMinSpinTimer();
-          this._context.balance += this._context.bet;
-          this.emit('balance:changed', { balance: this._context.balance, reason: 'refund' });
+          if (this.canRefundLocally(event.error)) {
+            this._context.balance += this._context.bet;
+            this.emit('balance:changed', { balance: this._context.balance, reason: 'refund' });
+          } else {
+            // The server may have applied the round: take the balance from the server
+            this.emit('effect', { type: 'sync_balance' });
+          }
           const rollbackStops = this._context.previousStops ?? this.engine.getStops();
           this.emit('effect', { type: 'stop_reels', data: { stops: rollbackStops } });
           this.transition('stopping');
@@ -243,7 +248,7 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
         this.emit('balance:changed', { balance: this._context.balance, reason: 'win' });
       }
 
-      // Сбрасываем контекст
+      // Reset the round context
       this._context.bet = 0;
       this._context.previousStops = null;
       this._context.currentRequestId = null;
@@ -273,7 +278,7 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
   private handleInterrupt(): void {
     this.clearMinSpinTimer();
 
-    // Отменяем текущий запрос
+    // Drop the current request
     this._context.currentRequestId = null;
 
     const requestAlreadySent = this._state === 'spinning';
@@ -289,11 +294,16 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
       this.emit('balance:changed', { balance: this._context.balance, reason: 'refund' });
     }
 
-    // Форсируем остановку движка
+    if (skipRefund) {
+      // The request is in flight and may still apply: take the balance from the server
+      this.emit('effect', { type: 'sync_balance' });
+    }
+
+    // Force the engine to stop
     const stops = this._context.previousStops ?? this.engine.getStops();
     this.engine.forceIdle(stops);
 
-    // Очищаем контекст
+    // Reset the round context
     this._context.bet = 0;
     this._context.previousStops = null;
     this._context.response = null;
@@ -303,6 +313,11 @@ export class GameRoundMachine extends EventEmitter<GameRoundMachineEvents> {
     this._context.autoSpinActive = false;
 
     this.transition('idle');
+  }
+
+  /** Mock rounds and rounds the server rejected outright never touched the server wallet. */
+  private canRefundLocally(error: SpinRequestError): boolean {
+    return this.spinService.getSource() === 'mock' || !error.outcomeUnknown;
   }
 
   private checkReadyToStop(): void {

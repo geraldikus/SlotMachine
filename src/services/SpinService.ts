@@ -4,7 +4,10 @@ import { createRoundSeed } from '../logic/rng';
 import { evaluateWin, MATH_VERSION, matrixFromStops, randomStops } from '../../supabase/functions/_shared/slotMath';
 import { GAME_VERSION, RoundStep } from '../round/types';
 import { InMemoryRoundHistory } from './InMemoryRoundHistory';
+import { SpinRequestError } from './SpinRequestError';
 import { invokeSupabaseSpin } from './supabaseClient';
+
+export { SpinRequestError } from './SpinRequestError';
 
 export interface SpinResponse {
   matrix: ResultMatrix;
@@ -23,14 +26,7 @@ export interface SpinResponse {
 
 export type SpinMockMode = 'slow' | 'error';
 export type SpinSource = 'mock' | 'supabase';
-export type SupabaseSpinInvoker = (bet: number) => Promise<SpinResponse>;
-
-export class SpinRequestError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'SpinRequestError';
-  }
-}
+export type SupabaseSpinInvoker = (bet: number, requestId: string) => Promise<SpinResponse>;
 
 export interface SpinRequestedEvent {
   requestId: string;
@@ -77,8 +73,8 @@ function delay(ms: number): Promise<void> {
 
 export class SpinService extends EventEmitter<SpinServiceEvents> {
   private nextMockMode: SpinMockMode | null = null;
-  private requestCounter = 0;
   private source: SpinSource = 'mock';
+  private inFlight: Promise<unknown> | null = null;
 
   constructor(
     private readonly supabaseSpin: SupabaseSpinInvoker = invokeSupabaseSpin,
@@ -102,7 +98,7 @@ export class SpinService extends EventEmitter<SpinServiceEvents> {
     }
   }
 
-  /** Следующий спин ответит медленно или упадёт с ошибкой (один раз). */
+  /** Makes the next mock spin slow or failing, once. */
   armNextSpin(mode: SpinMockMode): void {
     if (this.source !== 'mock') {
       return;
@@ -110,37 +106,48 @@ export class SpinService extends EventEmitter<SpinServiceEvents> {
     this.nextMockMode = mode;
   }
 
-  /** Отменяет armed режим. */
+  /** Cancels the armed mock mode. */
   disarmNextSpin(): void {
     this.nextMockMode = null;
   }
 
-  /**
-   * Запрос спина: локальный мок или Edge Function.
-   * Генерирует события spin:requested, spin:success или spin:error.
-   */
-  async requestSpin(bet: number): Promise<SpinResponse> {
-    const requestId = `spin_${Date.now()}_${this.requestCounter++}`;
-    this.emit('spin:requested', { requestId, bet });
-
-    try {
-      const response = this.source === 'supabase'
-        ? await this.requestSupabaseSpin(bet)
-        : await this.requestMockSpin(bet);
-
-      this.emit('spin:success', { requestId, response });
-      return response;
-    } catch (error) {
-      const spinError = error instanceof SpinRequestError
-        ? error
-        : new SpinRequestError(error instanceof Error ? error.message : 'Unknown error');
-      this.emit('spin:error', { requestId, error: spinError });
-      throw spinError;
+  /** Resolves once no spin request is in flight. */
+  async whenIdle(): Promise<void> {
+    while (this.inFlight) {
+      await this.inFlight.catch(() => undefined);
     }
   }
 
-  private async requestSupabaseSpin(bet: number): Promise<SpinResponse> {
-    return this.supabaseSpin(bet);
+  /**
+   * Requests a spin from the local mock or the Edge Function.
+   * The request id doubles as the idempotency key on the server.
+   * Emits spin:requested, then spin:success or spin:error.
+   */
+  async requestSpin(bet: number): Promise<SpinResponse> {
+    const requestId = crypto.randomUUID();
+    this.emit('spin:requested', { requestId, bet });
+
+    const request = this.source === 'supabase'
+      ? this.supabaseSpin(bet, requestId)
+      : this.requestMockSpin(bet);
+    this.inFlight = request;
+
+    try {
+      const response = await request;
+      this.emit('spin:success', { requestId, response });
+      return response;
+    } catch (error) {
+      const spinError = error instanceof SpinRequestError ? error : new SpinRequestError('NETWORK_ERROR');
+      if (!(error instanceof SpinRequestError)) {
+        console.error('Spin request failed', error);
+      }
+      this.emit('spin:error', { requestId, error: spinError });
+      throw spinError;
+    } finally {
+      if (this.inFlight === request) {
+        this.inFlight = null;
+      }
+    }
   }
 
   private async requestMockSpin(bet: number): Promise<SpinResponse> {
@@ -149,7 +156,7 @@ export class SpinService extends EventEmitter<SpinServiceEvents> {
 
     if (mockMode === 'error') {
       await delay(randomInt(ERROR_DELAY_MIN_MS, ERROR_DELAY_MAX_MS));
-      throw new SpinRequestError('Network error');
+      throw new SpinRequestError('NETWORK_ERROR');
     }
 
     const delayMs =

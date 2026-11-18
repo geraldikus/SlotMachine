@@ -53,6 +53,6 @@ export interface RoundCompleteEvent {
 }
 
 export interface EffectEvent {
-  type: 'start_reels' | 'stop_reels' | 'show_win' | 'clear_win' | 'show_error' | 'clear_error';
+  type: 'start_reels' | 'stop_reels' | 'sync_balance' | 'show_win' | 'clear_win' | 'show_error' | 'clear_error';
   data?: any;
 }

@@ -103,7 +103,7 @@ describe('GameRoundMachine', () => {
     vi.useRealTimers();
   });
 
-  describe('Успешные раунды', () => {
+  describe('Successful rounds', () => {
     it('completes a round without win and debits balance once', () => {
       const { machine, spinService, engine, minSpinMs } = createHarness();
       const stateChanges: string[] = [];
@@ -221,7 +221,7 @@ describe('GameRoundMachine', () => {
     });
   });
 
-  describe('Обработка ошибок', () => {
+  describe('Errors', () => {
     it('refunds bet and enters error state on network error', () => {
       const { machine, spinService, engine } = createHarness();
       const balanceChanges: Array<{ balance: number; reason: string }> = [];
@@ -235,7 +235,7 @@ describe('GameRoundMachine', () => {
       });
 
       startRound(machine, 10);
-      spinService.emitError(new SpinRequestError('Network error'));
+      spinService.emitError(new SpinRequestError('NETWORK_ERROR'));
 
       expect(machine.state).toBe('stopping');
       expect(machine.context.balance).toBe(100);
@@ -250,6 +250,44 @@ describe('GameRoundMachine', () => {
 
       machine.dispatch({ type: 'ERROR_HANDLED' });
       expect(machine.state).toBe('idle');
+    });
+
+    it('does not refund locally and syncs the balance when a supabase outcome is unknown', () => {
+      const { machine, spinService, engine } = createHarness();
+      spinService.getSource.mockReturnValue('supabase');
+      const balanceChanges: Array<{ balance: number; reason: string }> = [];
+      const effects: string[] = [];
+      machine.on('balance:changed', (event) => {
+        balanceChanges.push({ balance: event.balance, reason: event.reason });
+      });
+      machine.on('effect', (event) => {
+        effects.push(event.type);
+      });
+
+      startRound(machine, 10);
+      spinService.emitError(new SpinRequestError('TIMEOUT'));
+
+      expect(balanceChanges).toEqual([{ balance: 90, reason: 'debit' }]);
+      expect(effects).toContain('sync_balance');
+      expect(effects).toContain('stop_reels');
+
+      engine.emitAllStopped();
+      expect(machine.state).toBe('error');
+    });
+
+    it('refunds locally when the server rejected the round', () => {
+      const { machine, spinService } = createHarness();
+      spinService.getSource.mockReturnValue('supabase');
+      const effects: string[] = [];
+      machine.on('effect', (event) => {
+        effects.push(event.type);
+      });
+
+      startRound(machine, 10);
+      spinService.emitError(new SpinRequestError('INSUFFICIENT_FUNDS'));
+
+      expect(machine.context.balance).toBe(100);
+      expect(effects).not.toContain('sync_balance');
     });
 
     it('ignores network response with stale requestId', () => {
@@ -271,7 +309,7 @@ describe('GameRoundMachine', () => {
     });
   });
 
-  describe('Прерывание', () => {
+  describe('Interrupt', () => {
     it('does not refund locally on INTERRUPT in supabase mode', () => {
       const { machine, spinService } = createHarness();
       spinService.getSource.mockReturnValue('supabase');
@@ -281,6 +319,20 @@ describe('GameRoundMachine', () => {
 
       expect(machine.state).toBe('idle');
       expect(machine.context.balance).toBe(90);
+    });
+
+    it('requests a balance sync on INTERRUPT in supabase mode', () => {
+      const { machine, spinService } = createHarness();
+      spinService.getSource.mockReturnValue('supabase');
+      const effects: string[] = [];
+      machine.on('effect', (event) => {
+        effects.push(event.type);
+      });
+
+      startRound(machine, 10);
+      machine.dispatch({ type: 'INTERRUPT' });
+
+      expect(effects).toContain('sync_balance');
     });
 
     it('refunds and resets on INTERRUPT during spin', () => {

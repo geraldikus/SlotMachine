@@ -1,6 +1,14 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, FunctionsFetchError, FunctionsHttpError, SupabaseClient } from '@supabase/supabase-js';
+import { isSpinErrorCode } from '../../supabase/functions/_shared/errors';
+import { STRINGS } from '../config/strings';
 import { CellPosition, ResultMatrix } from '../config/types';
 import { RoundStep } from '../round/types';
+import { SpinRequestError } from './SpinRequestError';
+
+const SPIN_TIMEOUT_MS = 8000;
+/** Extra attempts with the same request id after a network failure or timeout. */
+const SPIN_RETRIES = 2;
+const SPIN_RETRY_DELAY_MS = 500;
 
 export interface RemoteSpinResult {
   matrix: ResultMatrix;
@@ -36,7 +44,7 @@ export function getSupabaseClient(): SupabaseClient {
   const url = import.meta.env.VITE_SUPABASE_URL;
   const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
   if (!url || !key) {
-    throw new Error('Supabase is not configured');
+    throw new Error(STRINGS.supabase.notConfigured);
   }
 
   client = createClient(url, key);
@@ -73,31 +81,74 @@ export async function fetchRemoteProfile(): Promise<RemoteProfile> {
     await delay(200);
   }
 
-  throw new Error('Profile not found');
+  throw new Error(STRINGS.supabase.profileNotFound);
 }
 
 export async function connectSupabaseProfile(): Promise<RemoteProfile> {
   if (!isSupabaseConfigured()) {
-    throw new Error('Supabase is not configured');
+    throw new Error(STRINGS.supabase.notConfigured);
   }
 
   await ensureAnonymousSession();
   return fetchRemoteProfile();
 }
 
-export async function invokeSupabaseSpin(bet: number): Promise<RemoteSpinResult> {
+/**
+ * Calls the spin Edge Function. A network failure or timeout is retried with the same
+ * request id: the server applies a request id once and answers repeats with the stored round.
+ */
+export async function invokeSupabaseSpin(bet: number, requestId: string): Promise<RemoteSpinResult> {
   await ensureAnonymousSession();
 
+  let lastError: SpinRequestError = new SpinRequestError('NETWORK_ERROR');
+  for (let attempt = 0; attempt <= SPIN_RETRIES; attempt += 1) {
+    if (attempt > 0) {
+      await delay(SPIN_RETRY_DELAY_MS * attempt);
+    }
+
+    try {
+      return await invokeSpinOnce(bet, requestId);
+    } catch (error) {
+      lastError = error instanceof SpinRequestError ? error : new SpinRequestError('NETWORK_ERROR');
+      if (lastError.code !== 'NETWORK_ERROR' && lastError.code !== 'TIMEOUT') {
+        throw lastError;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+async function invokeSpinOnce(bet: number, requestId: string): Promise<RemoteSpinResult> {
   const { data, error } = await getSupabaseClient().functions.invoke('spin', {
-    body: { bet },
+    body: { bet, requestId },
+    timeout: SPIN_TIMEOUT_MS,
   });
 
   if (error) {
-    throw new Error(error.message);
+    throw await toSpinRequestError(error);
   }
 
+  return parseSpinPayload(data);
+}
+
+async function toSpinRequestError(error: unknown): Promise<SpinRequestError> {
+  if (error instanceof FunctionsHttpError) {
+    const body = await (error.context as Response).json().catch(() => null) as { error?: unknown } | null;
+    return new SpinRequestError(isSpinErrorCode(body?.error) ? body.error : 'INTERNAL_ERROR');
+  }
+
+  if (error instanceof FunctionsFetchError) {
+    const cause = error.context as { name?: string } | undefined;
+    return new SpinRequestError(cause?.name === 'AbortError' ? 'TIMEOUT' : 'NETWORK_ERROR');
+  }
+
+  console.error('Spin request failed', error);
+  return new SpinRequestError('NETWORK_ERROR');
+}
+
+export function parseSpinPayload(data: unknown): RemoteSpinResult {
   const payload = data as {
-    error?: string;
     matrix?: ResultMatrix;
     stops?: number[];
     winAmount?: number;
@@ -112,8 +163,8 @@ export async function invokeSupabaseSpin(bet: number): Promise<RemoteSpinResult>
     mathVersion?: string;
   } | null;
 
-  if (!payload || payload.error || !payload.matrix || payload.winAmount === undefined || !isStopList(payload.stops)) {
-    throw new Error(payload?.error ?? 'Invalid spin response');
+  if (!payload || !payload.matrix || payload.winAmount === undefined || !isStopList(payload.stops)) {
+    throw new SpinRequestError('INVALID_RESPONSE');
   }
 
   return {

@@ -1,12 +1,23 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { isSpinErrorCode, SpinErrorCode } from '../_shared/errors.ts';
 import { evaluateWin, MATH_VERSION, matrixFromStops, randomStops } from '../_shared/slotMath.ts';
 
 const BET_OPTIONS = [1.5, 3, 5, 8, 10, 15, 20, 30, 50];
 const GAME_VERSION = '1.0.0';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+const ERROR_STATUS: Record<SpinErrorCode, number> = {
+  NOT_AUTHENTICATED: 401,
+  INVALID_REQUEST: 400,
+  INVALID_BET: 400,
+  INSUFFICIENT_FUNDS: 400,
+  PROFILE_NOT_FOUND: 404,
+  INTERNAL_ERROR: 500,
 };
 
 Deno.serve(async (req) => {
@@ -17,7 +28,7 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return json({ error: 'NOT_AUTHENTICATED' }, 401);
+      return errorResponse('NOT_AUTHENTICATED');
     }
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
@@ -29,27 +40,26 @@ Deno.serve(async (req) => {
       error: userError,
     } = await supabase.auth.getUser();
     if (userError || !user) {
-      return json({ error: 'NOT_AUTHENTICATED' }, 401);
+      return errorResponse('NOT_AUTHENTICATED');
     }
 
-    const body = (await req.json()) as { bet?: unknown };
+    const body = await readBody(req);
+    if (!body) {
+      return errorResponse('INVALID_REQUEST');
+    }
+
+    const requestId = typeof body.requestId === 'string' ? body.requestId : '';
+    if (!UUID_PATTERN.test(requestId)) {
+      return errorResponse('INVALID_REQUEST');
+    }
+
     const bet = Number(body.bet);
     if (!BET_OPTIONS.includes(bet)) {
-      return json({ error: 'INVALID_BET' }, 400);
+      return errorResponse('INVALID_BET');
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('balance, spin_count')
-      .eq('id', user.id)
-      .single();
-
-    if (profileError || !profile) {
-      return json({ error: 'PROFILE_NOT_FOUND' }, 404);
-    }
-    if (Number(profile.balance) < bet) {
-      return json({ error: 'INSUFFICIENT_FUNDS' }, 400);
-    }
+    // Balance and profile checks live in apply_round, under the row lock.
+    // A check here would wrongly reject a retry of a round that already went through.
 
     const stops = randomStops();
     const matrix = matrixFromStops(stops);
@@ -68,7 +78,8 @@ Deno.serve(async (req) => {
 
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     if (!serviceRoleKey) {
-      return json({ error: 'SERVICE_ROLE_MISSING' }, 500);
+      console.error('SUPABASE_SERVICE_ROLE_KEY is not set');
+      return errorResponse('INTERNAL_ERROR');
     }
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, serviceRoleKey, {
@@ -77,6 +88,7 @@ Deno.serve(async (req) => {
 
     const { data: applied, error: applyError } = await admin.rpc('apply_round', {
       p_user_id: user.id,
+      p_request_id: requestId,
       p_bet: bet,
       p_win_amount: winAmount,
       p_steps: steps,
@@ -86,37 +98,62 @@ Deno.serve(async (req) => {
     });
 
     if (applyError) {
-      return json({ error: applyError.message }, 400);
+      // apply_round raises its error code as the exception message.
+      if (isSpinErrorCode(applyError.message)) {
+        return errorResponse(applyError.message);
+      }
+      console.error('apply_round failed', applyError);
+      return errorResponse('INTERNAL_ERROR');
     }
 
     const row = Array.isArray(applied) ? applied[0] : applied;
     if (!row?.round_id) {
-      return json({ error: 'APPLY_FAILED' }, 500);
+      console.error('apply_round returned no round', applied);
+      return errorResponse('INTERNAL_ERROR');
     }
 
+    // For a repeated request id these are the stored round's values, not the ones drawn above.
+    const roundSteps = row.round_steps as typeof steps;
+    const firstStep = roundSteps[0];
+
     return json({
-      matrix,
-      stops,
-      winAmount,
-      winningCells,
-      lines,
+      matrix: firstStep.matrix,
+      stops: firstStep.stops,
+      winAmount: Number(row.round_win),
+      winningCells: firstStep.winningCells,
+      lines: firstStep.lines ?? [],
       balance: Number(row.balance),
       totalWin: Number(row.total_win),
       roundId: row.round_id,
-      seed,
-      steps,
-      gameVersion: GAME_VERSION,
-      mathVersion: MATH_VERSION,
+      seed: row.round_seed,
+      steps: roundSteps,
+      gameVersion: row.round_game_version,
+      mathVersion: row.round_math_version,
+      repeated: Boolean(row.is_repeat),
     });
   } catch (error) {
-    return json({ error: String(error) }, 500);
+    console.error('spin failed', error);
+    return errorResponse('INTERNAL_ERROR');
   }
 });
+
+async function readBody(req: Request): Promise<Record<string, unknown> | null> {
+  try {
+    const body = await req.json();
+    return body && typeof body === 'object' ? (body as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
 
 function createRoundSeed(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function errorResponse(code: SpinErrorCode): Response {
+  return json({ error: code }, ERROR_STATUS[code]);
 }
 
 function json(body: unknown, status = 200): Response {

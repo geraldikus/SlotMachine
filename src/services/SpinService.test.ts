@@ -62,7 +62,7 @@ describe('SpinService', () => {
 
     service.armNextSpin('error');
     const promise = service.requestSpin(10);
-    const rejection = expect(promise).rejects.toThrow('Network error');
+    const rejection = expect(promise).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
     await vi.advanceTimersByTimeAsync(700);
     await rejection;
     expect(errors).toHaveLength(1);
@@ -125,7 +125,7 @@ describe('SpinService', () => {
     const response = await promise;
 
     expect(requested).toHaveLength(1);
-    expect(supabaseSpin).toHaveBeenCalledWith(10);
+    expect(supabaseSpin).toHaveBeenCalledWith(10, expect.stringMatching(/^[0-9a-f-]{36}$/));
     expect(response).toEqual({
       matrix: REMOTE_MATRIX,
       stops: [0, 1, 2, 3],
@@ -191,7 +191,7 @@ describe('SpinService', () => {
     service.armNextSpin('error');
 
     const promise = service.requestSpin(10);
-    const rejection = expect(promise).rejects.toThrow('Network error');
+    const rejection = expect(promise).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
     await vi.advanceTimersByTimeAsync(700);
     await rejection;
 

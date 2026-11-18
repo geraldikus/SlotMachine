@@ -12,7 +12,8 @@ import { evaluateWin } from '../../supabase/functions/_shared/slotMath';
 import { SoundService } from '../services/SoundService';
 import { RoundHistoryError, RoundHistoryService } from '../services/RoundHistoryService';
 import { SpinService, SpinSourceSwitch } from '../services/SpinService';
-import { connectSupabaseProfile } from '../services/supabaseClient';
+import { connectSupabaseProfile, fetchRemoteProfile } from '../services/supabaseClient';
+import { STRINGS } from '../config/strings';
 import { HistoryPanel } from '../ui/history/HistoryPanel';
 import { PaytablePanel } from '../ui/paytable/PaytablePanel';
 import { DesktopGameUI } from '../ui/desktop/DesktopGameUI';
@@ -449,8 +450,27 @@ async function bootstrap(): Promise<void> {
           engine.stopWithStops(data.stops);
         }
         break;
+      case 'sync_balance':
+        void syncBalanceFromServer();
+        break;
     }
   });
+
+  /** Reads the wallet back from the server after a round whose outcome the client could not confirm. */
+  async function syncBalanceFromServer(): Promise<void> {
+    await spinService.whenIdle();
+    try {
+      const profile = await fetchRemoteProfile();
+      // A newer round carries its own server balance, so a late sync must not overwrite it.
+      if (spinService.getSource() !== 'supabase' || !(roundMachine.matches('idle') || roundMachine.matches('error'))) {
+        return;
+      }
+      applyWallet(profile.balance, profile.totalWin, true);
+    } catch (error) {
+      console.error('Balance sync failed', error);
+      gameUI?.showError(STRINGS.supabase.balanceSyncFailed);
+    }
+  }
 
   roundMachine.on('round:complete', ({ continueAutoSpin }) => {
     if (continueAutoSpin && roundMachine.context.autoSpinActive && balance >= currentBet) {
