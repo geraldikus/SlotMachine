@@ -1,11 +1,14 @@
-export const CURRENCY_CODE = 'FUN';
+import { BET_OPTIONS, INITIAL_BALANCE, MINOR_UNITS_PER_FUN } from '../../supabase/functions/_shared/money';
 
-export const INITIAL_BALANCE = 1000;
-export const BET_OPTIONS = [1.5, 3, 5, 8, 10, 15, 20, 30, 50] as const;
-export const DEFAULT_BET = BET_OPTIONS[0];
+export { BET_OPTIONS, INITIAL_BALANCE, MINOR_UNITS_PER_FUN };
+
+export const CURRENCY_CODE = 'FUN';
+export const DEFAULT_BET: number = BET_OPTIONS[0];
 export const INITIAL_TOTAL_WIN = 0;
 
-export function formatFun(amount: number): string {
+/** Formats an amount in minor units, for example 150 → "1.5 FUN". */
+export function formatFun(amountMinor: number): string {
+  const amount = Math.round(amountMinor) / MINOR_UNITS_PER_FUN;
   const formatted = Number.isInteger(amount)
     ? amount.toLocaleString('en-US')
     : amount.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 2 });

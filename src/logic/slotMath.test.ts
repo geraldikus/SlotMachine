@@ -107,7 +107,7 @@ describe('slotMath', () => {
       ['black-berry-light', 'raspberry', 'red-cherry', 'strawberry'],
       ['black-berry-light', 'black-cherry', 'strawberry', 'red-cherry'],
     ];
-    const result = evaluateWin(matrix, 1.5);
+    const result = evaluateWin(matrix, 150);
     expect(result.lines).toEqual([
       [
         { row: 0, col: 0 },
@@ -115,7 +115,7 @@ describe('slotMath', () => {
         { row: 2, col: 0 },
       ],
     ]);
-    expect(result.winAmount).toBe(1.5 * (PAYTABLE['black-berry-light'][3] ?? 0));
+    expect(result.winAmount).toBe(150 * (PAYTABLE['black-berry-light'][3] ?? 0));
   });
 
   it('pays three strawberries on the right of a row', () => {

@@ -1,8 +1,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { isSpinErrorCode, SpinErrorCode } from '../_shared/errors.ts';
+import { isValidBet } from '../_shared/money.ts';
 import { evaluateWin, MATH_VERSION, matrixFromStops, randomStops } from '../_shared/slotMath.ts';
 
-const BET_OPTIONS = [1.5, 3, 5, 8, 10, 15, 20, 30, 50];
 const GAME_VERSION = '1.0.0';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -53,8 +53,9 @@ Deno.serve(async (req) => {
       return errorResponse('INVALID_REQUEST');
     }
 
-    const bet = Number(body.bet);
-    if (!BET_OPTIONS.includes(bet)) {
+    // Bets and wins are integers in minor units.
+    const bet = body.bet;
+    if (!isValidBet(bet)) {
       return errorResponse('INVALID_BET');
     }
 

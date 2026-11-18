@@ -31,18 +31,18 @@ describe('mapRoundRow', () => {
       game_version: '1.0.0',
       math_version: 'strips-v4',
       seed: 'abc',
-      bet: '10.5',
-      total_win: '31.5',
-      steps: [{ type: 'base', stops: STOPS, matrix: MATRIX, winningCells: [], win: 31.5 }],
+      bet: '1050',
+      total_win: '3150',
+      steps: [{ type: 'base', stops: STOPS, matrix: MATRIX, winningCells: [], win: 3150 }],
     })).toEqual({
       id: 'round-1',
       createdAt: '2026-10-29T09:00:00.000Z',
       gameVersion: '1.0.0',
       mathVersion: 'strips-v4',
       seed: 'abc',
-      bet: 10.5,
-      totalWin: 31.5,
-      steps: [{ type: 'base', stops: STOPS, matrix: MATRIX, winningCells: [], win: 31.5 }],
+      bet: 1050,
+      totalWin: 3150,
+      steps: [{ type: 'base', stops: STOPS, matrix: MATRIX, winningCells: [], win: 3150 }],
     });
   });
 });
