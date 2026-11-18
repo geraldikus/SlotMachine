@@ -1,66 +1,34 @@
 import { Application, Container } from 'pixi.js';
-import { DEFAULT_BET, INITIAL_BALANCE, INITIAL_TOTAL_WIN } from '../config/currency';
 import { loadSymbolTextures } from '../assets/loadSymbols';
-import { AlienCharacter, loadAlienAssets } from '../character';
-import { AppScreen, CellPosition, ResultMatrix } from '../config/types';
+import { loadAlienAssets } from '../character';
+import { AppScreen } from '../config/types';
 import { SlotEngine } from '../engine/SlotEngine';
-import { WinPresentation } from '../engine/WinPresentation';
 import { LayoutManager } from '../layout/LayoutManager';
-import { presentWin } from '../presentation/presentWin';
-import { ReplayPlayer } from '../replay/ReplayPlayer';
-import { evaluateWin } from '../../supabase/functions/_shared/slotMath';
+import { RoundHistoryService } from '../services/RoundHistoryService';
 import { SoundService } from '../services/SoundService';
-import { RoundHistoryError, RoundHistoryService } from '../services/RoundHistoryService';
-import { SpinService, SpinSourceSwitch } from '../services/SpinService';
-import { connectSupabaseProfile, fetchRemoteProfile } from '../services/supabaseClient';
-import { STRINGS } from '../config/strings';
-import { HistoryPanel } from '../ui/history/HistoryPanel';
-import { PaytablePanel } from '../ui/paytable/PaytablePanel';
-import { DesktopGameUI } from '../ui/desktop/DesktopGameUI';
-import { getSpritesheet, SpriteAtlasDebugPanel } from '../ui/debug/SpriteAtlasDebugPanel';
-import { IGameUI } from '../ui/IGameUI';
-import { MobileGameUI } from '../ui/mobile/MobileGameUI';
+import { SpinService } from '../services/SpinService';
+import { GameRoundMachine } from '../state/GameRoundMachine';
 import { PracticePanel } from '../ui/debug/PracticePanel';
+import { getSpritesheet, SpriteAtlasDebugPanel } from '../ui/debug/SpriteAtlasDebugPanel';
+import { HistoryPanel } from '../ui/history/HistoryPanel';
 import { LaunchView } from '../ui/launch/LaunchView';
+import { PaytablePanel } from '../ui/paytable/PaytablePanel';
 import { SoundControls } from '../ui/SoundControls';
 import { AppLifecycleController } from './AppLifecycleController';
-import { GameRoundMachine } from '../state/GameRoundMachine';
+import { GameScene } from './GameScene';
+import { ReplayController } from './ReplayController';
+import { RoundController } from './RoundController';
+import { SourceSwitchController } from './SourceSwitchController';
+import { WalletController } from './WalletController';
+import { WinDisplay } from './WinDisplay';
 
 const MIN_SPIN_MS = 2000;
-const AUTO_SPIN_WIN_PAUSE_MS = 800;
-
-let appScreen: AppScreen = 'loading';
-
-function createGameUI(
-  profile: LayoutManager['currentProfile'],
-  onSpin: () => void,
-  onAutoSpin: () => void,
-  soundService: SoundService,
-  spinService: SpinService,
-  sourceSwitch: SpinSourceSwitch,
-  onExitReplay: () => void,
-  onOpenHistory: () => void,
-  onOpenPaytable: () => void,
-): IGameUI & Container {
-  if (profile.id === 'desktop') {
-    return new DesktopGameUI(profile, onSpin, onAutoSpin, onExitReplay);
-  }
-  return new MobileGameUI(
-    profile,
-    onSpin,
-    onAutoSpin,
-    soundService,
-    spinService,
-    sourceSwitch,
-    onExitReplay,
-    onOpenHistory,
-    onOpenPaytable,
-  );
-}
 
 async function bootstrap(): Promise<void> {
+  let appScreen: AppScreen = 'loading';
   const layoutManager = new LayoutManager();
 
+  // ── Renderer and launch screen ──
   const app = new Application();
   await app.init({
     width: window.innerWidth,
@@ -86,514 +54,140 @@ async function bootstrap(): Promise<void> {
   gameRoot.zIndex = 1;
   app.stage.addChild(gameRoot);
 
-  const setAppScreen = (next: AppScreen): void => {
-    appScreen = next;
-
-    if (next === 'loading') {
-      launchView.visible = true;
-      gameRoot.visible = false;
-    }
-
-    if (next === 'playing') {
-      launchView.hide();
-      gameRoot.visible = true;
-    }
-  };
-
-  setAppScreen('loading'); // loading
-
+  // ── Assets ──
   const symbolTextures = await loadSymbolTextures();
   const spritesheet = await getSpritesheet();
+  await loadAlienAssets();
+  const soundService = new SoundService();
+  await soundService.init();
+
+  // ── Core game objects ──
+  const engine = new SlotEngine(symbolTextures);
+  engine.zIndex = 1;
+  gameRoot.addChild(engine);
+
+  const spinService = new SpinService();
+  const roundMachine = new GameRoundMachine(engine, spinService, MIN_SPIN_MS);
+  const historyService = new RoundHistoryService(() => spinService.getSource(), spinService.getMockHistory());
+
+  // The scene is created last; controllers reach the HUD and the character through these getters.
+  let scene: GameScene | null = null;
+  const getUI = () => scene?.ui ?? null;
+  const getAlien = () => scene?.alien ?? null;
+
+  // ── Stage panels ──
+  const soundControls = new SoundControls(soundService);
+  soundControls.zIndex = 50;
+  app.stage.addChild(soundControls);
+
   const atlasDebugPanel = new SpriteAtlasDebugPanel(spritesheet);
   atlasDebugPanel.visible = false;
   app.stage.addChild(atlasDebugPanel);
 
-  await loadAlienAssets();
-
-  const soundService = new SoundService();
-  await soundService.init();
-
-  const soundControls = new SoundControls(soundService);
-  soundControls.zIndex = 50;
-  soundControls.visible = layoutManager.currentProfile.id === 'desktop';
-  app.stage.addChild(soundControls);
-
-  const layoutSoundControls = (): void => {
-    const isDesktop = layoutManager.currentProfile.id === 'desktop';
-    soundControls.visible = isDesktop;
-    soundControls.eventMode = isDesktop ? 'static' : 'none';
-    if (isDesktop) {
-      soundControls.layout(window.innerWidth, window.innerHeight);
-    }
-  };
-  layoutSoundControls();
-
-  const engine = new SlotEngine(symbolTextures);
-  engine.zIndex = 1;
-  gameRoot.addChild(engine);
-  const winPresentation = new WinPresentation();
-  const spinService = new SpinService();
-  const roundMachine = new GameRoundMachine(engine, spinService, MIN_SPIN_MS);
-  const historyService = new RoundHistoryService(
-    () => spinService.getSource(),
-    spinService.getMockHistory(),
-  );
   const historyPanel = new HistoryPanel((roundId) => {
-    void startReplay(roundId);
+    void replay.start(roundId);
   });
   app.stage.addChild(historyPanel);
 
   const paytablePanel = new PaytablePanel(symbolTextures);
   app.stage.addChild(paytablePanel);
 
-  const replayPlayer = new ReplayPlayer({
+  // ── Controllers ──
+  const winDisplay = new WinDisplay({ engine, gameRoot, soundService, getUI, getAlien });
+  const wallet = new WalletController({ roundMachine, spinService, getUI });
+
+  const replay: ReplayController = new ReplayController({
     engine,
+    roundMachine,
+    historyService,
+    historyPanel,
+    paytablePanel,
+    winDisplay,
     minSpinMs: MIN_SPIN_MS,
-    canPlay: () => roundMachine.matches('idle') && !roundMachine.context.autoSpinActive,
-    presentWin: async (step) => {
-      if (!gameUI) {
-        return;
-      }
-      await presentWin({
-        engine,
-        winPresentation,
-        banner: gameUI.winBanner,
-        amount: step.win,
-        winningCells: step.winningCells,
-        lines: linesFor(step.matrix, step.winningCells),
-        gameRoot,
-        soundService,
-        alienCharacter: alienCharacter ?? undefined,
-      });
-    },
+    getUI,
+    getCurrentBet: () => getUI()?.currentBet ?? rounds.currentBet,
   });
 
-  function exitReplay(): void {
-    winPresentation.kill();
-    gameUI?.winBanner.hide();
-    engine.clearWinHighlight();
-    replayPlayer.exit();
-    gameUI?.setReplayMode(false);
-    gameUI?.hideError();
-  }
-
-  async function openHistory(): Promise<void> {
-    if (!roundMachine.matches('idle') || replayPlayer.isActive()) {
-      return;
-    }
-
-    historyPanel.showLoading();
-    historyPanel.layout(window.innerWidth, window.innerHeight);
-
-    try {
-      const rounds = await historyService.listRecent();
-      if (!roundMachine.matches('idle') || replayPlayer.isActive()) {
-        historyPanel.hide();
-        return;
-      }
-      historyPanel.setRounds(rounds);
-      historyPanel.layout(window.innerWidth, window.innerHeight);
-    } catch (error) {
-      historyPanel.hide();
-      const message = error instanceof RoundHistoryError ? error.message : 'Не удалось загрузить историю';
-      gameUI?.showError(message);
-    }
-  }
-
-  async function startReplay(roundId: string): Promise<void> {
-    if (!roundMachine.matches('idle') || roundMachine.context.autoSpinActive || replayPlayer.isActive()) {
-      return;
-    }
-
-    try {
-      const round = await historyService.getRound(roundId);
-      if (!roundMachine.matches('idle') || roundMachine.context.autoSpinActive || replayPlayer.isActive()) {
-        return;
-      }
-
-      historyPanel.hide();
-      paytablePanel.hide();
-      gameUI?.hideError();
-      winPresentation.kill();
-      engine.clearWinHighlight();
-      gameUI?.winBanner.hide();
-      gameUI?.setReplayMode(true);
-      await replayPlayer.play(round);
-    } catch (error) {
-      winPresentation.kill();
-      gameUI?.setReplayMode(false);
-      const message = error instanceof RoundHistoryError ? error.message : 'Replay failed';
-      gameUI?.showError(message);
-    }
-  }
-
-  replayPlayer.on('replay:step', () => {
-    winPresentation.kill();
-    gameUI?.winBanner.hide();
-    engine.clearWinHighlight();
+  let practicePanel: PracticePanel | null = null;
+  const sourceSwitch = new SourceSwitchController({
+    spinService,
+    roundMachine,
+    wallet,
+    isReplayActive: () => replay.isActive(),
+    getUI,
+    getPracticePanel: () => practicePanel,
   });
 
-  let balance = INITIAL_BALANCE;
-  let totalWin = INITIAL_TOTAL_WIN;
-  let currentBet: number = DEFAULT_BET;
-  let gameUI: (IGameUI & Container) | null = null;
-  let alienCharacter: AlienCharacter | null = null;
-  let sourceSwitchInFlight = false;
-
-  const applyWallet = (nextBalance: number, nextTotalWin: number, animate = false): void => {
-    balance = nextBalance;
-    totalWin = nextTotalWin;
-    roundMachine.setBalance(balance);
-    roundMachine.setTotalWin(totalWin);
-    gameUI?.setBalance(balance, animate);
-    gameUI?.setTotalWin(totalWin, animate);
-  };
-
-  const syncSourceUi = (): void => {
-    practicePanel.syncFromService();
-    if (gameUI && 'syncDemoPanel' in gameUI) {
-      (gameUI as MobileGameUI).syncDemoPanel();
-    }
-  };
-
-  const sourceSwitch: SpinSourceSwitch = {
-    canSwitch: () => roundMachine.matches('idle') && !sourceSwitchInFlight && !replayPlayer.isActive(),
-    onToggle: () => {
-      void handleSourceToggle();
-    },
-  };
-
-  const handleSourceToggle = async (): Promise<void> => {
-    if (!sourceSwitch.canSwitch()) {
-      return;
-    }
-
-    sourceSwitchInFlight = true;
-    const nextSource = spinService.getSource() === 'mock' ? 'supabase' : 'mock';
-
-    try {
-      if (nextSource === 'supabase') {
-        const profile = await connectSupabaseProfile();
-        spinService.setSource('supabase');
-        applyWallet(profile.balance, profile.totalWin);
-      } else {
-        spinService.setSource('mock');
-        applyWallet(INITIAL_BALANCE, INITIAL_TOTAL_WIN);
-      }
-      practicePanel.clearArmedVisuals();
-      if (gameUI && 'clearDemoPanelArmedVisuals' in gameUI) {
-        (gameUI as MobileGameUI).clearDemoPanelArmedVisuals();
-      }
-    } catch (error) {
-      spinService.setSource('mock');
-      const message = error instanceof Error ? error.message : 'Supabase connection failed';
-      gameUI?.showError(message);
-    } finally {
-      sourceSwitchInFlight = false;
-      syncSourceUi();
-    }
-  };
-
-  async function openPaytable(): Promise<void> {
-    if (!roundMachine.matches('idle') || replayPlayer.isActive()) {
-      return;
-    }
-
-    historyPanel.hide();
-    paytablePanel.show(gameUI?.currentBet ?? currentBet);
-    paytablePanel.layout(window.innerWidth, window.innerHeight);
-  }
-
-  const practicePanel = new PracticePanel(spinService, sourceSwitch, () => {
-    paytablePanel.hide();
-    void openHistory();
-  }, () => {
-    void openPaytable();
-  });
+  practicePanel = new PracticePanel(
+    spinService,
+    sourceSwitch,
+    () => void replay.openHistory(),
+    () => replay.openPaytable(),
+  );
   practicePanel.position.set(12, 12);
   practicePanel.visible = false;
   app.stage.addChild(practicePanel);
 
-  // Инициализируем баланс в FSM
-  roundMachine.setBalance(balance);
-  roundMachine.setTotalWin(totalWin);
-
-  const cancelAutoSpin = (): void => {
-    roundMachine.dispatch({ type: 'CANCEL_AUTO_SPIN' });
-    gameUI?.setAutoSpinActive(false);
-  };
-
-  const handleAutoSpinToggle = (): void => {
-    if (replayPlayer.isActive()) {
-      return;
-    }
-
-    if (roundMachine.context.autoSpinActive) {
-      cancelAutoSpin();
-      return;
-    }
-
-    roundMachine.dispatch({ type: 'ENABLE_AUTO_SPIN' });
-    gameUI?.setAutoSpinActive(true);
-    handleSpin();
-  };
-
-  const handleSpin = (): void => {
-    if (!roundMachine.matches('idle') || !gameUI || replayPlayer.isActive()) return;
-    soundService.unlockFromGesture();
-    
-    const bet = gameUI.currentBet;
-    currentBet = bet;
-    
-    // Dispatch события для начала раунда
-    roundMachine.dispatch({ type: 'USER_SPIN', bet });
-  };
-
-  // Подписываемся на события FSM для обработки side-effects
-  roundMachine.on('state:changed', ({ from, to, context }) => {
-    switch (to) {
-      case 'debiting':
-        historyPanel.hide();
-        paytablePanel.hide();
-        void soundService.ensureUnlocked();
-        practicePanel.clearArmedVisuals();
-        if (gameUI && 'clearDemoPanelArmedVisuals' in gameUI) {
-          (gameUI as any).clearDemoPanelArmedVisuals();
-        }
-        winPresentation.kill();
-        engine.clearWinHighlight();
-        gameUI?.winBanner.hide();
-        gameUI?.hideError();
-        alienCharacter?.playHit();
-        gameUI?.setBetSelectorEnabled(false);
-        
-        // Запускаем процесс debiting
-        const previousStops = engine.getStops();
-        roundMachine.dispatch({ type: 'BET_DEBITED', bet: context.bet, previousStops });
-        break;
-
-      case 'error':
-        if (context.error) {
-          gameUI?.showError(context.error.message);
-        }
-        roundMachine.dispatch({ type: 'CANCEL_AUTO_SPIN' });
-        gameUI?.setAutoSpinActive(false);
-        gameUI?.setBetSelectorEnabled(true);
-        window.setTimeout(() => {
-          roundMachine.dispatch({ type: 'ERROR_HANDLED' });
-        }, 100);
-        break;
-
-      case 'presenting_win':
-        if (context.response && gameUI) {
-          const { winAmount, winningCells } = context.response;
-          totalWin = context.response.totalWin ?? totalWin + winAmount;
-          gameUI.setTotalWin(totalWin, true);
-
-          void presentWin({
-            engine,
-            winPresentation,
-            banner: gameUI.winBanner,
-            amount: winAmount,
-            winningCells,
-            lines: context.response.lines.length > 0
-              ? context.response.lines
-              : linesFor(context.response.matrix, winningCells),
-            gameRoot,
-            soundService,
-            alienCharacter: alienCharacter ?? undefined,
-          }).then(() => {
-            const pauseMs = roundMachine.context.autoSpinActive ? AUTO_SPIN_WIN_PAUSE_MS : 0;
-            window.setTimeout(() => {
-              roundMachine.dispatch({ type: 'WIN_INTRO_DONE' });
-            }, pauseMs);
-          });
-        }
-        break;
-
-      case 'settling':
-        // Проверяем условия для продолжения auto-spin
-        const continueAutoSpin = 
-          roundMachine.context.autoSpinActive && 
-          balance >= currentBet;
-        
-        setTimeout(() => {
-          roundMachine.dispatch({ type: 'ROUND_COMPLETE', continueAutoSpin });
-        }, 100);
-        break;
-
-      case 'idle':
-        if (from !== 'idle') {
-          gameUI?.setBetSelectorEnabled(true);
-        }
-        break;
-    }
+  const rounds: RoundController = new RoundController({
+    roundMachine,
+    engine,
+    soundService,
+    wallet,
+    replay,
+    winDisplay,
+    practicePanel,
+    getUI,
+    getAlien,
   });
 
-  roundMachine.on('balance:changed', ({ balance: newBalance, reason }) => {
-    balance = newBalance;
-    gameUI?.setBalance(balance, true);
-    roundMachine.setBalance(balance);
-    if (reason === 'win') {
-      totalWin = roundMachine.context.totalWin;
-      gameUI?.setTotalWin(totalWin, true);
-    }
+  // ── Scene ──
+  scene = new GameScene({
+    app,
+    layoutManager,
+    gameRoot,
+    engine,
+    soundService,
+    soundControls,
+    spinService,
+    sourceSwitch,
+    callbacks: {
+      onSpin: () => rounds.spin(),
+      onAutoSpin: () => rounds.toggleAutoSpin(),
+      onExitReplay: () => replay.exit(),
+      onOpenHistory: () => void replay.openHistory(),
+      onOpenPaytable: () => replay.openPaytable(),
+    },
+    desktopOnly: [practicePanel],
+    overlays: [historyPanel, paytablePanel, atlasDebugPanel],
+    getHudSnapshot: () => ({
+      balance: wallet.balance,
+      totalWin: wallet.totalWin,
+      bet: rounds.currentBet,
+      replayActive: replay.isActive(),
+    }),
+    onHudCreated: (ui) => {
+      rounds.currentBet = ui.currentBet;
+      sourceSwitch.syncUI();
+    },
   });
-
-  roundMachine.on('effect', ({ type: effectType, data }) => {
-    switch (effectType) {
-      case 'start_reels':
-        engine.startSpin();
-        break;
-      case 'stop_reels':
-        if (data?.stops) {
-          engine.stopWithStops(data.stops);
-        }
-        break;
-      case 'sync_balance':
-        void syncBalanceFromServer();
-        break;
-    }
-  });
-
-  /** Reads the wallet back from the server after a round whose outcome the client could not confirm. */
-  async function syncBalanceFromServer(): Promise<void> {
-    await spinService.whenIdle();
-    try {
-      const profile = await fetchRemoteProfile();
-      // A newer round carries its own server balance, so a late sync must not overwrite it.
-      if (spinService.getSource() !== 'supabase' || !(roundMachine.matches('idle') || roundMachine.matches('error'))) {
-        return;
-      }
-      applyWallet(profile.balance, profile.totalWin, true);
-    } catch (error) {
-      console.error('Balance sync failed', error);
-      gameUI?.showError(STRINGS.supabase.balanceSyncFailed);
-    }
-  }
-
-  roundMachine.on('round:complete', ({ continueAutoSpin }) => {
-    if (continueAutoSpin && roundMachine.context.autoSpinActive && balance >= currentBet) {
-      window.setTimeout(() => handleSpin(), 100);
-    } else {
-      roundMachine.dispatch({ type: 'CANCEL_AUTO_SPIN' });
-      gameUI?.setAutoSpinActive(false);
-    }
-  });
-
-  function layoutScene(profileChanged: boolean): void {
-    const currentProfile = layoutManager.currentProfile;
-    const transform = layoutManager.resizeRenderer(app);
-
-    gameRoot.scale.set(transform.scale);
-    gameRoot.position.set(transform.x, transform.y);
-
-    const { scaleX, scaleY } = currentProfile.getSlotScale();
-    const slotPosition = currentProfile.getSlotPosition(scaleX, scaleY);
-    engine.scale.set(scaleX, scaleY);
-    engine.position.set(slotPosition.x, slotPosition.y);
-
-    if (profileChanged || !gameUI) {
-      const previousState = gameUI?.getState();
-      gameUI?.destroy({ children: true });
-      gameUI = createGameUI(
-        currentProfile,
-        handleSpin,
-        handleAutoSpinToggle,
-        soundService,
-        spinService,
-        sourceSwitch,
-        exitReplay,
-        () => {
-          paytablePanel.hide();
-          void openHistory();
-        },
-        () => {
-          void openPaytable();
-        },
-      );
-      gameUI.zIndex = 3;
-      gameRoot.addChild(gameUI);
-      gameUI.applyState({
-        balance: previousState?.balance ?? balance,
-        totalWin: previousState?.totalWin ?? totalWin,
-        bet: previousState?.bet ?? currentBet,
-      });
-      balance = previousState?.balance ?? balance;
-      totalWin = previousState?.totalWin ?? totalWin;
-      currentBet = previousState?.bet ?? currentBet;
-      gameUI.setReplayMode(replayPlayer.isActive());
-      syncSourceUi();
-    }
-
-    const isDesktop = currentProfile.id === 'desktop';
-
-    if (!isDesktop && alienCharacter) {
-      console.log('[AlienCharacter] destroy');
-      alienCharacter.destroy({ children: true });
-      alienCharacter = null;
-    }
-
-    if (isDesktop && !alienCharacter) {
-      console.log('[AlienCharacter] create');
-      alienCharacter = new AlienCharacter();
-      alienCharacter.zIndex = 2;
-      alienCharacter.attachPointerTracking(app.stage);
-      gameRoot.addChild(alienCharacter);
-    }
-
-    if (alienCharacter) {
-      const alienLayout = currentProfile.getAlienLayout?.();
-      if (alienLayout) {
-        alienCharacter.applyLayout(alienLayout);
-      }
-    }
-
-    practicePanel.visible = isDesktop;
-  }
 
   await launchView.waitUntilReady();
-  setAppScreen('playing');
-  layoutScene(false);
+  appScreen = 'playing';
+  launchView.hide();
+  gameRoot.visible = true;
+  scene.attach();
 
-  const lifecycleController = new AppLifecycleController({
+  new AppLifecycleController({
     app,
-    layoutScene: () => layoutScene(false),
+    layoutScene: () => scene?.layout(false),
     unlockSound: () => soundService.unlockFromGesture(),
     getAppScreen: () => appScreen,
-  });
-  lifecycleController.attach();
-
-  window.addEventListener('resize', () => {
-    const profileChanged = layoutManager.refreshProfile();
-    layoutScene(profileChanged);
-    layoutSoundControls();
-    historyPanel.layout(window.innerWidth, window.innerHeight);
-    paytablePanel.layout(window.innerWidth, window.innerHeight);
-    if (atlasDebugPanel.visible) {
-      atlasDebugPanel.layout(window.innerWidth, window.innerHeight);
-    }
-  });
-
-  app.renderer.on('resize', () => {
-    layoutSoundControls();
-    if (atlasDebugPanel.visible) {
-      atlasDebugPanel.layout(window.innerWidth, window.innerHeight);
-    }
-  });
+  }).attach();
 
   app.ticker.add((ticker) => {
     engine.update(ticker.deltaTime);
-    gameUI?.update();
+    getUI()?.update();
   });
-}
-
-function linesFor(matrix: ResultMatrix, winningCells: CellPosition[]): CellPosition[][] {
-  const lines = evaluateWin(matrix, 1).lines;
-  if (lines.length > 0) {
-    return lines;
-  }
-  return winningCells.length > 0 ? [winningCells] : [];
 }
 
 bootstrap().catch((error: unknown) => {

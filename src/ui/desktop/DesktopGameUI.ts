@@ -204,6 +204,14 @@ export class DesktopGameUI extends Container implements IGameUI {
     this.errorBanner.hide();
   }
 
+  clearDemoPanelArmedVisuals(): void {
+    // The desktop demo panel lives outside the HUD.
+  }
+
+  syncDemoPanel(): void {
+    // The desktop demo panel lives outside the HUD.
+  }
+
   update(): void {
     this.balanceCounter.update();
     this.winCounter.update();

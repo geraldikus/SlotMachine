@@ -18,6 +18,10 @@ export interface IGameUI {
   setReplayMode(active: boolean): void;
   showError(message: string): void;
   hideError(): void;
+  /** Clears the armed slow/error marks of an in-HUD demo panel, if the layout has one. */
+  clearDemoPanelArmedVisuals(): void;
+  /** Re-reads the spin source into an in-HUD demo panel, if the layout has one. */
+  syncDemoPanel(): void;
   update(): void;
   destroy(options?: { children?: boolean }): void;
 }
