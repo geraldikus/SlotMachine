@@ -32,11 +32,6 @@ Deno.serve(async (req) => {
       return json({ error: 'NOT_AUTHENTICATED' }, 401);
     }
 
-    const { error: cleanupError } = await supabase.rpc('cleanup_stale_demo_data');
-    if (cleanupError) {
-      console.error('cleanup_stale_demo_data failed', cleanupError.message);
-    }
-
     const body = (await req.json()) as { bet?: unknown };
     const bet = Number(body.bet);
     if (!BET_OPTIONS.includes(bet)) {
